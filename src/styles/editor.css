@@ -1,0 +1,78 @@
+/* ================================================== CodeMirror surface */
+.cm-editor { height: 100%; background: var(--bg); color: var(--text); }
+.cm-editor.cm-focused { outline: none; }
+.cm-scroller {
+  font-family: var(--font-mono);
+  font-size: var(--editor-font-size);
+  line-height: 1.85;
+  padding: 40px 0 55vh;
+  overflow: auto;
+}
+.cm-editor .cm-content, .cm-editor .cm-line {
+  font-family: var(--font-mono);
+  font-size: var(--editor-font-size);
+}
+/* Persian prose reads far better in the proportional face; code tokens stay mono */
+.app[data-editor-font='estedad'] .cm-editor .cm-content,
+.app[data-editor-font='estedad'] .cm-editor .cm-line,
+.app[data-editor-font='auto'][data-dir='rtl'] .cm-editor .cm-content,
+.app[data-editor-font='auto'][data-dir='rtl'] .cm-editor .cm-line {
+  font-family: var(--font-ui);
+  letter-spacing: 0;
+}
+.cm-editor .cm-md-code, .cm-editor .cm-md-meta { font-family: var(--font-mono); }
+.cm-content {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 0 44px !important;
+  caret-color: var(--accent);
+}
+/* per-line automatic direction: a line starting with Persian text goes RTL */
+.cm-line { unicode-bidi: plaintext; text-align: start; padding: 0 !important; }
+.cm-editor .cm-line-rtl { direction: rtl; text-align: right; unicode-bidi: isolate; }
+.cm-editor .cm-line-ltr { direction: ltr; text-align: left; unicode-bidi: isolate; }
+.app[data-dir='rtl'] .cm-content { direction: rtl; }
+.app[data-dir='ltr'] .cm-content { direction: ltr; }
+.app[data-dir='ltr'] .cm-line { unicode-bidi: normal; }
+
+.cm-editor .cm-dropCursor { border-inline-start: 2px solid var(--accent); }
+/* native selection: the browser lays it out with real bidi geometry, so an RTL
+   selection highlights exactly the glyphs it covers */
+.cm-editor .cm-content ::selection,
+.cm-editor .cm-line::selection,
+.cm-editor ::selection { background: color-mix(in srgb, var(--accent) 32%, transparent); }
+.cm-editor .cm-activeLine { background: color-mix(in srgb, var(--bg-hover) 45%, transparent); }
+.cm-gutters { display: none; }
+
+.cm-editor .cm-panels { background: var(--bg-elev); color: var(--text); border-color: var(--border); font-family: var(--font-ui); }
+.cm-editor .cm-panels.cm-panels-bottom { border-block-start: 1px solid var(--border); }
+.cm-editor .cm-search { padding: 8px 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cm-editor .cm-textfield {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; font-size: 12.5px; color: var(--text);
+}
+.cm-editor .cm-button {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px;
+  font-size: 12px; color: var(--text); background-image: none;
+}
+.cm-editor .cm-button:hover { border-color: var(--accent); color: var(--accent); }
+.cm-editor .cm-searchMatch { background: var(--mark); }
+.cm-editor .cm-searchMatch-selected { background: var(--accent); color: #fff; }
+
+/* markdown token colours — restrained, syntax stays quiet */
+.cm-md-heading { font-weight: 800; color: var(--text); }
+.cm-md-h1 { font-size: 1.35em; }
+.cm-md-h2 { font-size: 1.2em; }
+.cm-md-h3 { font-size: 1.08em; }
+.cm-md-mark { color: var(--text-dim); opacity: .65; font-weight: 400; }
+.cm-md-emphasis { font-style: italic; }
+.cm-md-strong { font-weight: 800; }
+.cm-md-strike { text-decoration: line-through; color: var(--text-dim); }
+.cm-md-link { color: var(--accent); }
+.cm-md-url { color: var(--text-dim); text-decoration: underline; }
+.cm-md-code { font-family: var(--font-mono); color: #b3439b; }
+:root[data-theme='dark'] .cm-md-code { color: #e08bd0; }
+.cm-md-quote { color: var(--text-soft); font-style: italic; }
+.cm-md-list { color: var(--accent); }
+.cm-md-meta { color: var(--text-dim); }
+.cm-md-hr { color: var(--text-dim); }
+.cm-fenced-bg { background: color-mix(in srgb, var(--code-bg) 70%, transparent); }

@@ -1,0 +1,190 @@
+{
+  "name": "mashdavood",
+  "productName": "MashDavood",
+  "version": "1.0.0",
+  "description": "MashDavood (مش داوود) — a clean, minimal Markdown reader & editor with first-class Persian/RTL support",
+  "main": "electron/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "vite build",
+    "start": "vite build && electron .",
+    "pack": "vite build && electron-builder --mac --arm64 --dir",
+    "dist": "vite build && electron-builder --mac --arm64",
+    "dev": "vite",
+    "electron:dev": "MDREADER_DEV=1 electron .",
+    "dist:win": "vite build && electron-builder --win",
+    "dist:mac": "vite build && electron-builder --mac"
+  },
+  "author": "Vahid Yaghoubian",
+  "license": "MIT",
+  "devDependencies": {
+    "@codemirror/commands": "^6.11.0",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.4",
+    "@codemirror/view": "^6.43.11",
+    "@lezer/highlight": "^1.2.3",
+    "codemirror": "^6.0.2",
+    "dompurify": "^3.4.14",
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3",
+    "highlight.js": "^11.12.0",
+    "katex": "^0.18.5",
+    "markdown-it": "^15.0.1",
+    "markdown-it-anchor": "^10.0.0",
+    "markdown-it-deflist": "^4.0.0",
+    "markdown-it-footnote": "^4.0.0",
+    "markdown-it-mark": "^4.0.0",
+    "markdown-it-multimd-table": "^4.2.3",
+    "markdown-it-sub": "^2.0.0",
+    "markdown-it-sup": "^2.0.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "mermaid": "^11.17.2",
+    "vite": "^8.2.2"
+  },
+  "dependencies": {},
+  "build": {
+    "appId": "com.mashdavood.app",
+    "productName": "MashDavood",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "darkModeSupport": true,
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "extendInfo": {
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Markdown Document",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Owner",
+            "LSItemContentTypes": [
+              "net.daringfireball.markdown",
+              "public.plain-text"
+            ],
+            "CFBundleTypeExtensions": [
+              "md",
+              "markdown",
+              "mdown",
+              "mkd",
+              "mdx"
+            ],
+            "CFBundleTypeIconFile": "icon.icns"
+          }
+        ],
+        "NSHumanReadableCopyright": "mdReader"
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown",
+          "mdown",
+          "mkd",
+          "mdx"
+        ],
+        "name": "Markdown Document",
+        "role": "Editor",
+        "rank": "Owner",
+        "icon": "build/icon.icns"
+      }
+    ],
+    "dmg": {
+      "title": "MashDavood",
+      "contents": [
+        {
+          "x": 140,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-${arch}-${target}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MashDavood",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "vehij",
+        "repo": "MashDavood",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vehij/MashDavood.git"
+  }
+}
