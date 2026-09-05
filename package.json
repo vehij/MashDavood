@@ -149,8 +149,7 @@
             "x64"
           ]
         }
-      ],
-      "artifactName": "${productName}-${version}-${arch}-${target}.${ext}"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -160,7 +159,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "MashDavood",
       "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "${productName}-${version}-${arch}-Setup.${ext}"
     },
     "linux": {
       "icon": "build/icon.png",
@@ -181,7 +181,10 @@
         "repo": "MashDavood",
         "releaseType": "release"
       }
-    ]
+    ],
+    "portable": {
+      "artifactName": "${productName}-${version}-${arch}-Portable.${ext}"
+    }
   },
   "repository": {
     "type": "git",
