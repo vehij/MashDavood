@@ -18,10 +18,11 @@
 
 | سیستم | فایل |
 |---|---|
-| **macOS** (Apple Silicon) | `MashDavood-*-arm64.dmg` |
-| **macOS** (Intel) | `MashDavood-*.dmg` (x64) |
-| **Windows** (نصب‌کننده) | `MashDavood-*-x64-Setup.exe` |
-| **Windows** (بدون نصب / Portable) | `MashDavood-*-x64-Portable.exe` |
+| **macOS** — Apple Silicon (M1…M4) | `MashDavood-1.0.0-arm64.dmg` |
+| **macOS** — Intel | `MashDavood-1.0.0.dmg` |
+| **Windows** — نصب‌کننده ۶۴ بیتی | `MashDavood-1.0.0-x64-Setup.exe` |
+| **Windows** — بدون نصب (Portable) | `MashDavood-1.0.0-x64-Portable.exe` |
+| **Windows** — ARM | `MashDavood-1.0.0-arm64-Setup.exe` |
 
 همه از صفحه‌ی **[Releases](https://github.com/vehij/MashDavood/releases/latest)**.
 
