@@ -18,21 +18,27 @@
 
 | سیستم | فایل |
 |---|---|
-| **macOS** — Apple Silicon (M1…M4) | `MashDavood-1.0.0-arm64.dmg` |
-| **macOS** — Intel | `MashDavood-1.0.0.dmg` |
-| **Windows** — نصب‌کننده ۶۴ بیتی | `MashDavood-1.0.0-x64-Setup.exe` |
-| **Windows** — بدون نصب (Portable) | `MashDavood-1.0.0-x64-Portable.exe` |
-| **Windows** — ARM | `MashDavood-1.0.0-arm64-Setup.exe` |
+| **macOS** — Apple Silicon (M1…M4) | `MashDavood-<v>-arm64.dmg` |
+| **macOS** — Intel | `MashDavood-<v>.dmg` |
+| **Windows** — نصب‌کننده ۶۴ بیتی | `MashDavood-<v>-x64-Setup.exe` |
+| **Windows** — بدون نصب (Portable) | `MashDavood-<v>-x64-Portable.exe` |
+| **Windows** — اگر مرورگر جلوی exe را گرفت | `MashDavood-<v>-x64.zip` |
+| **Windows** — ARM | `MashDavood-<v>-arm64-Setup.exe` |
 
 همه از صفحه‌ی **[Releases](https://github.com/vehij/MashDavood/releases/latest)**.
 
-اپ امضای رسمی اپل/مایکروسافت ندارد، پس بار اول:
+اپ امضای دیجیتال اپل/مایکروسافت ندارد (باینری تازه و امضانشده = بی‌اعتبار از نظر
+سیستم‌عامل)، پس بار اول:
 
 - **macOS**: بعد از کپی به `Applications`، اگر باز نشد:
   ```bash
   xattr -dr com.apple.quarantine /Applications/MashDavood.app
   ```
-- **Windows**: در پیام SmartScreen روی *More info* → *Run anyway* بزنید.
+- **Windows**: در پیام SmartScreen روی *More info* → *Run anyway*. اگر مرورگر فایل را
+  «خطرناک» خواند یا برنامه بعد از نصب باز نشد، راهنمای کامل:
+  **[docs/WINDOWS.md](docs/WINDOWS.md)**
+
+صحت فایل‌ها با `SHA256SUMS-*.txt` در همان Release قابل بررسی است.
 
 ---
 
