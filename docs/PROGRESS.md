@@ -5,7 +5,7 @@
 ## وضعیت کلی: منتشر شده ✅
 
 - ریپو (پابلیک): <https://github.com/vehij/MashDavood>
-- آخرین نسخه: <https://github.com/vehij/MashDavood/releases/tag/v1.0.2> — مک (arm64 + Intel) و ویندوز (x64 Setup/Portable/zip + arm64) + `SHA256SUMS-*.txt`
+- آخرین نسخه: <https://github.com/vehij/MashDavood/releases/tag/v1.0.3> — مک (arm64 + Intel) و ویندوز (x64 Setup/Portable/zip + arm64) + `SHA256SUMS-*.txt`
 - روی این مک: `/Applications/MashDavood.app` نصب و به‌عنوان اپ پیش‌فرض `.md` ثبت شده؛ فونت استعداد در `~/Library/Fonts`
 - انتشار نسخه بعدی: نسخه را در `package.json` بالا ببرید، تگ `vX.Y.Z` بزنید و push کنید؛
   GitHub Actions هر دو پلتفرم را می‌سازد و در Releases می‌گذارد (متن انتشار: `.github/RELEASE_NOTES.md`).
@@ -37,6 +37,10 @@
       `scripts/make-icons.py` (`.png`/`.ico` با فریم BMP/`.icns` با فاصله مک)
 - [x] آیکون «MD» (قبلاً «مش») با گوشه‌های شفاف
 - [x] `SHA256SUMS` در هر Release (`scripts/checksums.mjs` — روی ویندوز `shasum` وجود ندارد)
+- [x] متن ریلیز از قالب `.github/RELEASE_NOTES.md` برای هر تگ رندر می‌شود
+      (`scripts/release-notes.mjs`) و جدول دانلودش لینک مستقیم دارد
+- [x] نام فایل‌ها بدون شماره نسخه ⇒ لینک دائمی `releases/latest/download/<name>`
+      در README؛ جاب `finalize` هر لینک را با فایل‌های واقعی ریلیز چک می‌کند
 
 ## گزارش‌های کاربران ویندوز (نسخه ۱.۰.۰) و وضعیت‌شان
 
