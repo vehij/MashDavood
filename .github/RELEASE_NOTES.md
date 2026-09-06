@@ -5,14 +5,21 @@
 
 | سیستم | فایل |
 |---|---|
-| macOS — Apple Silicon (M1…M4) | `MashDavood-1.0.1-arm64.dmg` |
-| macOS — Intel | `MashDavood-1.0.1.dmg` |
-| Windows — نصب‌کننده ۶۴ بیتی | `MashDavood-1.0.1-x64-Setup.exe` |
-| Windows — بدون نصب (Portable) | `MashDavood-1.0.1-x64-Portable.exe` |
-| Windows — اگر مرورگر جلوی exe را گرفت | `MashDavood-1.0.1-x64.zip` |
-| Windows — ARM | `MashDavood-1.0.1-arm64-Setup.exe` |
+| macOS — Apple Silicon (M1…M4) | `MashDavood-1.0.2-arm64.dmg` |
+| macOS — Intel | `MashDavood-1.0.2.dmg` |
+| Windows — نصب‌کننده ۶۴ بیتی | `MashDavood-1.0.2-x64-Setup.exe` |
+| Windows — بدون نصب (Portable) | `MashDavood-1.0.2-x64-Portable.exe` |
+| Windows — اگر مرورگر جلوی exe را گرفت | `MashDavood-1.0.2-x64.zip` |
+| Windows — ARM | `MashDavood-1.0.2-arm64-Setup.exe` |
 
-## تغییرات ۱.۰.۱ — رفع مشکلات نصب روی ویندوز
+## تغییرات
+
+**۱.۰.۲**
+
+- آیکون برنامه از «مش» به **MD** تغییر کرد (طرح و رنگ‌ها همان).
+- ساخت `SHA256SUMS-Windows.txt` که در ۱.۰.۱ روی رانر ویندوز خالی می‌ماند، درست شد.
+
+**۱.۰.۱ — رفع مشکلات نصب روی ویندوز**
 
 - **آیکون `.ico` بازنویسی شد**: فریم‌های آن PNG-compressed بود؛ NSIS و پوسته‌ی ویندوز
   فریم‌های کوچک PNG را قبول نمی‌کنند. حالا همه‌ی فریم‌ها BMP بدون فشرده‌سازی‌اند.

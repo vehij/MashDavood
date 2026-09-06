@@ -1,7 +1,7 @@
 {
   "name": "mashdavood",
   "productName": "MashDavood",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MashDavood (مش داوود) — a clean, minimal Markdown reader & editor with first-class Persian/RTL support",
   "main": "electron/main.js",
   "type": "commonjs",
