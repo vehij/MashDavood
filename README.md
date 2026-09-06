@@ -18,15 +18,16 @@
 
 | سیستم | فایل |
 |---|---|
-| **macOS** — Apple Silicon (M1…M4) | `MashDavood-<v>-arm64.dmg` |
-| **macOS** — Intel | `MashDavood-<v>.dmg` |
-| **Windows** — نصب‌کننده ۶۴ بیتی | `MashDavood-<v>-x64-Setup.exe` |
-| **Windows** — بدون نصب (Portable) | `MashDavood-<v>-x64-Portable.exe` |
-| **Windows** — اگر مرورگر جلوی exe را گرفت | `MashDavood-<v>-win.zip` |
-| **Windows** — ARM | `MashDavood-<v>-arm64-Setup.exe` |
+| **macOS** — Apple Silicon (M1…M4) | [MashDavood-arm64.dmg](https://github.com/vehij/MashDavood/releases/latest/download/MashDavood-arm64.dmg) |
+| **macOS** — Intel | [MashDavood-x64.dmg](https://github.com/vehij/MashDavood/releases/latest/download/MashDavood-x64.dmg) |
+| **Windows** — نصب‌کننده ۶۴ بیتی | [MashDavood-x64-Setup.exe](https://github.com/vehij/MashDavood/releases/latest/download/MashDavood-x64-Setup.exe) |
+| **Windows** — بدون نصب (Portable) | [MashDavood-x64-Portable.exe](https://github.com/vehij/MashDavood/releases/latest/download/MashDavood-x64-Portable.exe) |
+| **Windows** — اگر مرورگر جلوی exe را گرفت | [MashDavood-x64-win.zip](https://github.com/vehij/MashDavood/releases/latest/download/MashDavood-x64-win.zip) |
+| **Windows** — ARM | [MashDavood-arm64-Setup.exe](https://github.com/vehij/MashDavood/releases/latest/download/MashDavood-arm64-Setup.exe) |
 
-همه از صفحه‌ی **[Releases](https://github.com/vehij/MashDavood/releases/latest)** — همان‌جا
-جدولی با لینک مستقیم هر فایل هست، کافی است روی فایل خودتان کلیک کنید.
+این لینک‌ها **همیشه آخرین نسخه** را می‌دهند (نام فایل‌ها شماره‌ی نسخه ندارد)، پس می‌شود
+همین‌ها را برای هم‌تیمی‌ها فرستاد. فهرست کامل و تغییرات هر نسخه:
+**[Releases](https://github.com/vehij/MashDavood/releases/latest)**.
 
 اپ امضای دیجیتال اپل/مایکروسافت ندارد (باینری تازه و امضانشده = بی‌اعتبار از نظر
 سیستم‌عامل)، پس بار اول:

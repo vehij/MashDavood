@@ -5,19 +5,25 @@
 
 | سیستم | فایل |
 |---|---|
-| **macOS** — Apple Silicon (M1…M4) | [⬇ MashDavood-{{V}}-arm64.dmg]({{URL}}/MashDavood-{{V}}-arm64.dmg) |
-| **macOS** — Intel | [⬇ MashDavood-{{V}}.dmg]({{URL}}/MashDavood-{{V}}.dmg) |
-| **Windows** — نصب‌کننده ۶۴ بیتی *(اکثر کاربران)* | [⬇ MashDavood-{{V}}-x64-Setup.exe]({{URL}}/MashDavood-{{V}}-x64-Setup.exe) |
-| **Windows** — بدون نصب (Portable) | [⬇ MashDavood-{{V}}-x64-Portable.exe]({{URL}}/MashDavood-{{V}}-x64-Portable.exe) |
-| **Windows** — اگر مرورگر جلوی `.exe` را گرفت | [⬇ MashDavood-{{V}}-win.zip]({{URL}}/MashDavood-{{V}}-win.zip) |
-| **Windows** — ARM64 | [⬇ MashDavood-{{V}}-arm64-Setup.exe]({{URL}}/MashDavood-{{V}}-arm64-Setup.exe) |
-| **Windows** — نصب‌کننده‌ی همه‌کاره (x64 + ARM در یک فایل) | [⬇ MashDavood-{{V}}-Setup.exe]({{URL}}/MashDavood-{{V}}-Setup.exe) |
+| **macOS** — Apple Silicon (M1…M4) | [⬇ MashDavood-arm64.dmg]({{URL}}/MashDavood-arm64.dmg) |
+| **macOS** — Intel | [⬇ MashDavood-x64.dmg]({{URL}}/MashDavood-x64.dmg) |
+| **Windows** — نصب‌کننده ۶۴ بیتی *(اکثر کاربران)* | [⬇ MashDavood-x64-Setup.exe]({{URL}}/MashDavood-x64-Setup.exe) |
+| **Windows** — بدون نصب (Portable) | [⬇ MashDavood-x64-Portable.exe]({{URL}}/MashDavood-x64-Portable.exe) |
+| **Windows** — اگر مرورگر جلوی `.exe` را گرفت | [⬇ MashDavood-x64-win.zip]({{URL}}/MashDavood-x64-win.zip) |
+| **Windows** — ARM64 | [⬇ MashDavood-arm64-Setup.exe]({{URL}}/MashDavood-arm64-Setup.exe) |
+| **Windows** — نصب‌کننده‌ی همه‌کاره (x64 + ARM در یک فایل) | [⬇ MashDavood-Setup.exe]({{URL}}/MashDavood-Setup.exe) |
 
 بررسی صحت فایل‌ها:
 [SHA256SUMS-Windows.txt]({{URL}}/SHA256SUMS-Windows.txt) ·
 [SHA256SUMS-macOS.txt]({{URL}}/SHA256SUMS-macOS.txt)
 
 ## تغییرات
+
+**۱.۰.۳**
+
+- شماره‌ی نسخه از نام فایل‌ها برداشته شد، پس این لینک‌ها همیشه به آخرین نسخه اشاره می‌کنند:
+  `github.com/vehij/MashDavood/releases/latest/download/MashDavood-x64-Setup.exe`
+  (و به همین شکل برای بقیه‌ی فایل‌ها). نسخه‌ی نصب‌شده در منوی About دیده می‌شود.
 
 **۱.۰.۲**
 

@@ -11,10 +11,10 @@
 
 | فایل | برای چه کسی | نکته |
 |---|---|---|
-| `MashDavood-<v>-x64-Setup.exe` | اکثر کاربران (ویندوز ۶۴ بیتی) | نصب‌کننده، شورتکات و ثبت `.md` |
-| `MashDavood-<v>-x64.zip` | اگر مرورگر جلوی `.exe` را گرفت | **کمتر از همه هشدار می‌گیرد** — اکسترکت کنید و `MashDavood.exe` را اجرا کنید |
-| `MashDavood-<v>-x64-Portable.exe` | اجرای بدون نصب | تک‌فایل، خودش را در temp باز می‌کند |
-| `MashDavood-<v>-arm64-Setup.exe` | ویندوز روی ARM (Surface Pro X و…) | |
+| `MashDavood-x64-Setup.exe` | اکثر کاربران (ویندوز ۶۴ بیتی) | نصب‌کننده، شورتکات و ثبت `.md` |
+| `MashDavood-x64-win.zip` | اگر مرورگر جلوی `.exe` را گرفت | **کمتر از همه هشدار می‌گیرد** — اکسترکت کنید و `MashDavood.exe` را اجرا کنید |
+| `MashDavood-x64-Portable.exe` | اجرای بدون نصب | تک‌فایل، خودش را در temp باز می‌کند |
+| `MashDavood-arm64-Setup.exe` | ویندوز روی ARM (Surface Pro X و…) | |
 
 اگر مرورگرتان سخت‌گیر است، **مسیر پیشنهادی: فایل `.zip`**. مرورگرها به `.exe` خیلی
 حساس‌ترند تا به یک آرشیو.
@@ -38,7 +38,7 @@
 در هر Release فایل `SHA256SUMS-Windows.txt` هست. در PowerShell:
 
 ```powershell
-Get-FileHash .\MashDavood-1.0.1-x64-Setup.exe -Algorithm SHA256
+Get-FileHash .\MashDavood-x64-Setup.exe -Algorithm SHA256
 ```
 
 خروجی باید با مقدار داخل آن فایل یکی باشد.

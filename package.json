@@ -1,7 +1,7 @@
 {
   "name": "mashdavood",
   "productName": "MashDavood",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "MashDavood (مش داوود) — a clean, minimal Markdown reader & editor with first-class Persian/RTL support",
   "main": "electron/main.js",
   "type": "commonjs",
@@ -100,7 +100,8 @@
           }
         ],
         "NSHumanReadableCopyright": "Copyright © 2026 Vahid Yaghoubian"
-      }
+      },
+      "artifactName": "${productName}-${arch}-mac.${ext}"
     },
     "fileAssociations": [
       {
@@ -130,7 +131,8 @@
           "type": "link",
           "path": "/Applications"
         }
-      ]
+      ],
+      "artifactName": "${productName}-${arch}.${ext}"
     },
     "win": {
       "icon": "build/icon.ico",
@@ -154,7 +156,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "artifactName": "${productName}-${arch}-win.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -165,7 +168,7 @@
       "shortcutName": "MashDavood",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "artifactName": "${productName}-${version}-${arch}-Setup.${ext}",
+      "artifactName": "${productName}-${arch}-Setup.${ext}",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true
     },
@@ -179,7 +182,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "artifactName": "${productName}-${arch}.${ext}"
     },
     "publish": [
       {
@@ -190,7 +194,7 @@
       }
     ],
     "portable": {
-      "artifactName": "${productName}-${version}-${arch}-Portable.${ext}"
+      "artifactName": "${productName}-${arch}-Portable.${ext}"
     },
     "copyright": "Copyright © 2026 Vahid Yaghoubian"
   },

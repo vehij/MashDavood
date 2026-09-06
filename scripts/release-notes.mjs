@@ -10,9 +10,11 @@
  * {{TAG}} -> the tag
  * {{URL}} -> https://github.com/<repo>/releases/download/<tag>
  *
- * --check asks the GitHub API for the release's assets and fails if the notes
- * link to a name that is not there — a dead download button is worse than none,
- * and asset names have drifted before (the Windows zip is -win.zip, not -x64.zip).
+ * --check asks the GitHub API for the release's assets and fails if the notes or
+ * the README link to a name that is not there — a dead download button is worse
+ * than none, and asset names have drifted before. The README links are the
+ * releases/latest/download/ permalinks, which only work while the artifact names
+ * stay exactly as electron-builder writes them.
  */
 import { readFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
@@ -39,7 +41,11 @@ if (flags.includes('--check')) {
     })
   ).assets.map((a) => a.name)
 
-  const linked = [...notes.matchAll(/releases\/download\/[^/]+\/([^\s)]+)/g)].map((m) => m[1])
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
+  const linked = [
+    ...[...notes.matchAll(/releases\/download\/[^/]+\/([^\s)]+)/g)].map((m) => m[1]),
+    ...[...readme.matchAll(/releases\/latest\/download\/([^\s)]+)/g)].map((m) => m[1])
+  ]
   const missing = [...new Set(linked)].filter((name) => !listed.includes(name))
 
   if (missing.length) {
