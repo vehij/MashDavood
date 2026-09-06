@@ -22,10 +22,11 @@
 | **macOS** — Intel | `MashDavood-<v>.dmg` |
 | **Windows** — نصب‌کننده ۶۴ بیتی | `MashDavood-<v>-x64-Setup.exe` |
 | **Windows** — بدون نصب (Portable) | `MashDavood-<v>-x64-Portable.exe` |
-| **Windows** — اگر مرورگر جلوی exe را گرفت | `MashDavood-<v>-x64.zip` |
+| **Windows** — اگر مرورگر جلوی exe را گرفت | `MashDavood-<v>-win.zip` |
 | **Windows** — ARM | `MashDavood-<v>-arm64-Setup.exe` |
 
-همه از صفحه‌ی **[Releases](https://github.com/vehij/MashDavood/releases/latest)**.
+همه از صفحه‌ی **[Releases](https://github.com/vehij/MashDavood/releases/latest)** — همان‌جا
+جدولی با لینک مستقیم هر فایل هست، کافی است روی فایل خودتان کلیک کنید.
 
 اپ امضای دیجیتال اپل/مایکروسافت ندارد (باینری تازه و امضانشده = بی‌اعتبار از نظر
 سیستم‌عامل)، پس بار اول:

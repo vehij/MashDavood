@@ -1,16 +1,21 @@
 **مش داوود** — یک اپلیکیشن تمیز و مینیمال برای خواندن و ویرایش Markdown با پشتیبانی کامل از فارسی و راست‌به‌چپ.
 *A clean, minimal Markdown reader & editor with first-class Persian / RTL support.*
 
-## کدام فایل را دانلود کنم؟
+## دانلود — روی فایل خودتان کلیک کنید
 
 | سیستم | فایل |
 |---|---|
-| macOS — Apple Silicon (M1…M4) | `MashDavood-1.0.2-arm64.dmg` |
-| macOS — Intel | `MashDavood-1.0.2.dmg` |
-| Windows — نصب‌کننده ۶۴ بیتی | `MashDavood-1.0.2-x64-Setup.exe` |
-| Windows — بدون نصب (Portable) | `MashDavood-1.0.2-x64-Portable.exe` |
-| Windows — اگر مرورگر جلوی exe را گرفت | `MashDavood-1.0.2-x64.zip` |
-| Windows — ARM | `MashDavood-1.0.2-arm64-Setup.exe` |
+| **macOS** — Apple Silicon (M1…M4) | [⬇ MashDavood-{{V}}-arm64.dmg]({{URL}}/MashDavood-{{V}}-arm64.dmg) |
+| **macOS** — Intel | [⬇ MashDavood-{{V}}.dmg]({{URL}}/MashDavood-{{V}}.dmg) |
+| **Windows** — نصب‌کننده ۶۴ بیتی *(اکثر کاربران)* | [⬇ MashDavood-{{V}}-x64-Setup.exe]({{URL}}/MashDavood-{{V}}-x64-Setup.exe) |
+| **Windows** — بدون نصب (Portable) | [⬇ MashDavood-{{V}}-x64-Portable.exe]({{URL}}/MashDavood-{{V}}-x64-Portable.exe) |
+| **Windows** — اگر مرورگر جلوی `.exe` را گرفت | [⬇ MashDavood-{{V}}-win.zip]({{URL}}/MashDavood-{{V}}-win.zip) |
+| **Windows** — ARM64 | [⬇ MashDavood-{{V}}-arm64-Setup.exe]({{URL}}/MashDavood-{{V}}-arm64-Setup.exe) |
+| **Windows** — نصب‌کننده‌ی همه‌کاره (x64 + ARM در یک فایل) | [⬇ MashDavood-{{V}}-Setup.exe]({{URL}}/MashDavood-{{V}}-Setup.exe) |
+
+بررسی صحت فایل‌ها:
+[SHA256SUMS-Windows.txt]({{URL}}/SHA256SUMS-Windows.txt) ·
+[SHA256SUMS-macOS.txt]({{URL}}/SHA256SUMS-macOS.txt)
 
 ## تغییرات
 
@@ -18,6 +23,7 @@
 
 - آیکون برنامه از «مش» به **MD** تغییر کرد (طرح و رنگ‌ها همان).
 - ساخت `SHA256SUMS-Windows.txt` که در ۱.۰.۱ روی رانر ویندوز خالی می‌ماند، درست شد.
+- جدول دانلود همین صفحه لینک‌دار شد.
 
 **۱.۰.۱ — رفع مشکلات نصب روی ویندوز**
 
@@ -28,9 +34,8 @@
   برنامه با فرمت درست هر پلتفرم استفاده می‌شود.
 - **گوشه‌های آیکون شفاف شد** (قبلاً روی تم تیره مثلث‌های سفید دیده می‌شد) و آیکون مک
   با فاصله‌ی استاندارد macOS بازسازی شد.
-- **خروجی `.zip` برای ویندوز** اضافه شد — اگر مرورگر جلوی دانلود `.exe` را گرفت،
-  این را بگیرید، اکسترکت کنید و `MashDavood.exe` را اجرا کنید.
-- **`SHA256SUMS-*.txt`** به هر Release اضافه شد برای بررسی صحت فایل.
+- **خروجی `.zip` برای ویندوز** اضافه شد.
+- **`SHA256SUMS-*.txt`** به هر Release اضافه شد.
 - اطلاعات ناشر و کپی‌رایت در فایل‌های اجرایی ویندوز درج شد.
 
 ## هشدار مرورگر / Defender
@@ -40,6 +45,9 @@ SmartScreen جلوی اجرا را بگیرد. این درباره‌ی محتو
 گواهی امضاست. راهنمای کامل (نگه‌داشتن فایل در Chrome، Run anyway در SmartScreen،
 بازگرداندن فایل از قرنطینه‌ی Defender، بررسی چک‌سام):
 **[docs/WINDOWS.md](https://github.com/vehij/MashDavood/blob/main/docs/WINDOWS.md)**
+
+روی **macOS** اگر برنامه باز نشد:
+`xattr -dr com.apple.quarantine /Applications/MashDavood.app`
 
 ## امکانات
 
