@@ -65,6 +65,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      # Ad-hoc signed (identity "-"): no Apple certificate, but a valid signature, so a
+      # quarantined download gets "unidentified developer" + Open Anyway in Privacy &
+      # Security instead of the dead-end "is damaged" an unsigned arm64 app gets.
+      # A broken signature fails here rather than on a user's Mac.
+      - name: Verify macOS signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          apps=(release/mac*/*.app)
+          [ ${#apps[@]} -gt 0 ] || { echo "no .app found under release/mac*"; exit 1; }
+          for app in "${apps[@]}"; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+            codesign -dv "$app" 2>&1 | grep -E '^(Identifier|Signature|CodeDirectory|TeamIdentifier)'
+          done
+
       # Unsigned binaries get flagged by SmartScreen and Chrome; checksums at least
       # let a cautious user confirm the file they got is the file CI built.
       - name: Publish checksums
