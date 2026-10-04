@@ -118,6 +118,13 @@ size check, and SHA-256 against `SHA256SUMS-<os>.txt` when listed. Install:
   reopens. Read-only parent / translocated / running from the dmg → the dmg is opened for a manual
   drag instead.
 - Portable / zip → saved to Downloads; Linux / unpackaged → release page.
+**macOS signing.** `mac.identity: "-"` ad-hoc signs the build: no Apple certificate, but a valid
+signature, so a browser download gets the "unidentified developer" prompt with *Open Anyway* in
+Privacy & Security. An *unsigned* arm64 app (≤ 1.1.0) is reported as "damaged" with no way to approve
+it except `xattr`. `hardenedRuntime` is off because, with an ad-hoc identity, library validation
+rejects the pre-signed Electron frameworks (different Team ID). CI checks every `.app` with
+`codesign --verify --deep --strict`.
+
 Files fetched by the app carry no quarantine flag / Mark of the Web, so the update does not trip
 Gatekeeper or SmartScreen again. The release notes shown are the `**x.y.z**` blocks of
 `## تغییرات` newer than the installed version.
