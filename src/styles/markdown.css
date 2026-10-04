@@ -6,10 +6,12 @@
   font-size: var(--preview-font-size);
   line-height: var(--preview-line-height);
   color: var(--text);
-  word-wrap: break-word;
-  overflow-wrap: anywhere;
+  /* break-word, not anywhere: `anywhere` also shrinks the min-content width, which
+     lets auto-sized table columns squeeze a Persian word into pieces (اطمینا|ن) */
+  overflow-wrap: break-word;
   text-align: start;
 }
+.markdown-body.justify p, .markdown-body.justify li, .markdown-body.justify dd { text-align: justify; }
 .markdown-body > *:first-child { margin-block-start: 0 !important; }
 
 /* every block gets dir="auto" from the renderer, so alignment must be logical */
@@ -19,6 +21,7 @@
 .markdown-body h4, .markdown-body h5, .markdown-body h6,
 .markdown-body blockquote, .markdown-body dd, .markdown-body dt,
 .markdown-body td, .markdown-body th { text-align: start; unicode-bidi: plaintext; }
+.markdown-body [data-weak] { unicode-bidi: isolate; }
 
 .markdown-body p { margin: 0 0 1.05em; }
 
@@ -70,7 +73,7 @@ ol[dir='rtl'] ol[dir='rtl'] { list-style-type: persian; }
 .markdown-body blockquote.tip .callout-title { color: #2ea27a; }
 
 .markdown-body code {
-  font-family: var(--font-mono); font-size: .88em; direction: ltr; unicode-bidi: embed;
+  font-family: var(--font-mono); font-size: .88em; direction: ltr; unicode-bidi: isolate;
   background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 5px; padding: .12em .35em;
 }
 .markdown-body pre {
@@ -91,11 +94,37 @@ ol[dir='rtl'] ol[dir='rtl'] { list-style-type: persian; }
 .markdown-body .code-wrap:hover .copy-btn { opacity: 1; }
 .markdown-body .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
 
-.markdown-body table {
-  border-collapse: collapse; margin: 1.3em 0; font-size: .94em; display: block; overflow-x: auto; max-width: 100%; width: fit-content;
+/* 1px padding: with collapsed borders half of the outer border lies outside the
+   table box, and the scrolling wrapper would clip it */
+.markdown-body .table-wrap { margin: 1.3em 0; max-width: 100%; overflow-x: auto; padding: 1px; }
+.markdown-body table { border-collapse: collapse; font-size: .94em; margin: 0; }
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--border); padding: .5em .85em; line-height: 1.75;
+  /* a word is never split to make a column narrower; long URLs just widen the table */
+  overflow-wrap: normal; word-break: normal; min-width: 3em;
 }
-.markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: .5em .85em; }
-.markdown-body th { background: var(--bg-sunken); font-weight: 700; }
+.markdown-body th { background: var(--bg-sunken); font-weight: 700; position: relative; }
+/* a column lines up on the table's side whatever language each cell is in;
+   the cell's own dir still orders its text. Explicit :---: alignment wins (inline style). */
+.markdown-body table[dir='rtl'] :is(th, td) { text-align: right; }
+.markdown-body table[dir='ltr'] :is(th, td) { text-align: left; }
+/* resized tables: the saved widths become proportions (percent <col>s) of a table as
+   wide as it was dragged, or the column if that is narrower (split view, PDF page).
+   Auto layout keeps every column at least as wide as its longest word, so a narrow
+   pane makes the table scroll rather than split words. */
+.markdown-body table.has-colwidths { width: min(100%, var(--table-w)); }
+.markdown-body .col-resizer {
+  position: absolute; inset-block: 0; right: -5px; width: 9px; cursor: col-resize; z-index: 2; user-select: none;
+}
+.markdown-body .table-wrap[dir='rtl'] .col-resizer { right: auto; left: -5px; }
+/* the last handle stays inside the table, or it would make the wrapper scroll */
+.markdown-body th:last-child > .col-resizer { right: 0; }
+.markdown-body .table-wrap[dir='rtl'] th:last-child > .col-resizer { right: auto; left: 0; }
+.markdown-body .col-resizer::after {
+  content: ''; position: absolute; inset-block: 0; left: 4px; width: 1px; background: transparent; transition: background .12s;
+}
+.markdown-body .col-resizer:hover::after, .markdown-body .col-resizer.dragging::after { background: var(--accent); width: 2px; }
+.markdown-body.resizing-cols, .markdown-body.resizing-cols * { cursor: col-resize !important; user-select: none !important; }
 .markdown-body tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-sunken) 55%, transparent); }
 
 .markdown-body img { max-width: 100%; height: auto; border-radius: 8px; margin: .4em 0; }
@@ -133,7 +162,7 @@ ol[dir='rtl'] ol[dir='rtl'] { list-style-type: persian; }
 .markdown-body .mermaid-block.error pre { margin: 0; background: transparent; border: none; color: var(--danger); font-size: 12px; }
 
 /* ------------------------------------------------------------ katex */
-.markdown-body .katex { font-size: 1.05em; direction: ltr; }
+.markdown-body .katex { font-size: 1.05em; direction: ltr; unicode-bidi: isolate; }
 .markdown-body .katex-display { margin: 1.3em 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
 .markdown-body .math-error { color: var(--danger); font-family: var(--font-mono); font-size: .85em; }
 
@@ -143,6 +172,27 @@ ol[dir='rtl'] ol[dir='rtl'] { list-style-type: persian; }
   border: 1px dashed var(--border-strong); direction: ltr; font-family: var(--font-mono); font-size: .8em;
   color: var(--text-dim); white-space: pre-wrap;
 }
+
+/* parsed front matter: a quiet key/value card */
+.markdown-body .fm-card {
+  margin: 0 0 1.8em; padding: 12px 16px 8px; border-radius: 10px; background: var(--bg-sunken);
+  border: 1px solid var(--border); font-size: .86em;
+}
+.markdown-body .fm-card dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 18px; }
+.markdown-body .fm-row { display: contents; }
+.markdown-body .fm-card dt {
+  font-family: var(--font-mono); font-size: .9em; color: var(--text-dim); font-weight: 400; padding-top: .1em;
+}
+.markdown-body .fm-card dd { margin: 0; color: var(--text); white-space: pre-line; }
+.markdown-body .fm-card[dir='rtl'] :is(dt, dd) { text-align: right; }
+.markdown-body .fm-card[dir='ltr'] :is(dt, dd) { text-align: left; }
+.markdown-body .fm-tag {
+  display: inline-block; margin-block: 1px; margin-inline-end: 6px; padding: 0 .55em; border-radius: 99px;
+  background: var(--accent-soft); color: var(--accent); font-size: .92em; line-height: 1.8;
+}
+.markdown-body .fm-raw { margin-top: 6px; }
+.markdown-body .fm-raw summary { font-size: .8em; color: var(--text-dim); cursor: pointer; width: fit-content; list-style-position: inside; }
+.markdown-body .fm-raw pre { margin: 6px 0 4px; padding: 8px 10px; font-size: .9em; white-space: pre-wrap; }
 
 /* ------------------------------------------------- highlight.js tokens */
 .hljs-comment, .hljs-quote { color: var(--text-dim); font-style: italic; }
@@ -176,7 +226,8 @@ ol[dir='rtl'] ol[dir='rtl'] { list-style-type: persian; }
 }
 @media print {
   .export-body { padding: 0; }
-  .markdown-body pre, .markdown-body .mermaid-block, .markdown-body table, .markdown-body blockquote { break-inside: avoid; }
+  .markdown-body pre, .markdown-body .mermaid-block, .markdown-body blockquote, .markdown-body tr { break-inside: avoid; }
+  .markdown-body thead { display: table-header-group; }
   .markdown-body h1, .markdown-body h2, .markdown-body h3 { break-after: avoid; }
   .markdown-body .copy-btn { display: none; }
 }

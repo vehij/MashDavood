@@ -16,6 +16,9 @@ const RTL_CHARS = '֐-׿؀-ۿ܀-ݏݐ-ݿހ-޿ࢠ-ࣿיִ-﷿ﹰ-﻿'
 const RTL_RE = new RegExp('[' + RTL_CHARS + ']')
 const RTL_G = new RegExp('[' + RTL_CHARS + ']', 'g')
 const LTR_RE = /[A-Za-zÀ-ɏ]/
+// Arabic-Indic and Persian digits sit inside the Arabic block but are weak characters:
+// they never decide a direction, only letters do
+const AR_DIGIT_RE = /[\u0660-\u0669\u06F0-\u06F9]/
 
 /** Detect the dominant direction of a chunk of text. */
 export function detectDirection (text) {
@@ -26,12 +29,12 @@ export function detectDirection (text) {
   return rtl > 8 && rtl > ltr * 0.35 ? 'rtl' : 'ltr'
 }
 
-export function firstStrongDirection (text) {
+export function firstStrongDirection (text, fallback = 'ltr') {
   for (const ch of text || '') {
-    if (RTL_RE.test(ch)) return 'rtl'
+    if (RTL_RE.test(ch) && !AR_DIGIT_RE.test(ch)) return 'rtl'
     if (LTR_RE.test(ch)) return 'ltr'
   }
-  return 'ltr'
+  return fallback
 }
 
 export function slugify (str) {
@@ -131,10 +134,12 @@ function mathPlugin (md) {
       return `<span class="math-error">${escapeAttr(content)}</span>`
     }
   }
-  md.renderer.rules.math_inline = (tokens, idx) => render(tokens[idx].content, false)
+  // data-tex keeps the source next to the rendering: copying the document pastes $…$, not glyph soup
+  md.renderer.rules.math_inline = (tokens, idx) =>
+    `<span class="math-inline" data-tex="${escapeAttr(tokens[idx].content)}">${render(tokens[idx].content, false)}</span>`
   md.renderer.rules.math_block = (tokens, idx) => {
     const line = tokens[idx].map ? tokens[idx].map[0] : 0
-    return `<div class="katex-display-wrap" data-line="${line}" dir="ltr">${render(tokens[idx].content, true)}</div>\n`
+    return `<div class="katex-display-wrap" data-line="${line}" data-tex="${escapeAttr(tokens[idx].content.trim())}" dir="ltr">${render(tokens[idx].content, true)}</div>\n`
   }
 }
 
@@ -179,19 +184,45 @@ function calloutPlugin (md) {
 const DIR_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'li', 'td', 'th', 'dt', 'dd', 'table', 'summary'])
 const LINE_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'ul', 'ol', 'table', 'hr', 'dl', 'pre'])
 
+/** Direction of a mixed block (a table, the front matter) by letter count. */
+function dominantDirection (text) {
+  const rtl = (text.match(RTL_G) || []).length
+  const ltr = (text.match(/[A-Za-z]/g) || []).length
+  return rtl && rtl >= ltr * 0.5 ? 'rtl' : 'ltr'
+}
+
+/** Direction of a whole table: one English header must not flip a Persian table. */
+function tableDirection (tokens, start) {
+  let text = ''
+  for (let j = start + 1; j < tokens.length && tokens[j].type !== 'table_close'; j++) {
+    if (tokens[j].type === 'inline') text += tokens[j].content + ' '
+  }
+  return dominantDirection(text)
+}
+
 function metaPlugin (md) {
   md.core.ruler.push('mdreader_meta', (state) => {
     const tokens = state.tokens
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i]
-      if (token.type.endsWith('_open') && (DIR_TAGS.has(token.tag) || token.tag === 'ul' || token.tag === 'ol')) {
+      if (token.type === 'table_open') {
+        token.attrSet('dir', tableDirection(tokens, i))
+      } else if (token.type.endsWith('_open') && (DIR_TAGS.has(token.tag) || token.tag === 'ul' || token.tag === 'ol')) {
         // resolve the direction from the first strong character of the block's own text,
         // which is what dir="auto" would do — but explicit, so CSS can react to it
-        let dir = null
+        let text = null
         for (let j = i + 1; j < tokens.length && j < i + 40; j++) {
-          if (tokens[j].type === 'inline' && tokens[j].content.trim()) { dir = firstStrongDirection(tokens[j].content); break }
+          if (tokens[j].type === 'inline' && tokens[j].content.trim()) { text = tokens[j].content; break }
         }
-        token.attrSet('dir', dir || 'auto')
+        const dir = text === null ? 'auto' : firstStrongDirection(text, null)
+        if (dir) token.attrSet('dir', dir)
+        else {
+          // only digits and punctuation (a version number, a price cell): no direction of
+          // its own. Persian digits read right-to-left; otherwise inherit the parent's.
+          // data-weak swaps unicode-bidi: plaintext (which falls back to LTR) for isolate.
+          token.attrSet('data-weak', '1')
+          if (AR_DIGIT_RE.test(text)) token.attrSet('dir', 'rtl')
+        }
       }
       if (token.map && (LINE_TAGS.has(token.tag) || token.type === 'fence' || token.type === 'hr')) {
         if (!token.attrGet('data-line')) token.attrSet('data-line', String(token.map[0]))
@@ -244,7 +275,7 @@ export function createRenderer () {
     if (lang === 'math' || lang === 'katex') {
       let out
       try { out = katex.renderToString(token.content, { displayMode: true, throwOnError: false, strict: false }) } catch { out = escapeAttr(token.content) }
-      return `<div class="katex-display-wrap" data-line="${line}" dir="ltr">${out}</div>\n`
+      return `<div class="katex-display-wrap" data-line="${line}" data-tex="${escapeAttr(token.content.trim())}" dir="ltr">${out}</div>\n`
     }
 
     const highlighted = options.highlight
@@ -257,6 +288,17 @@ export function createRenderer () {
       `<button class="copy-btn" data-copy>copy</button>` +
       `</div>\n`
   }
+
+  /* tables scroll inside a wrapper, so the table itself keeps real table layout
+     (a <colgroup> of saved column widths works) instead of display: block */
+  md.renderer.rules.table_open = (tokens, idx, opts, env, self) => {
+    const token = tokens[idx]
+    const line = token.attrGet('data-line')
+    const dir = token.attrGet('dir') || 'auto'
+    token.attrs = (token.attrs || []).filter(([name]) => name !== 'data-line')
+    return `<div class="table-wrap" dir="${dir}"${line !== null ? ` data-line="${line}"` : ''}>` + self.renderToken(tokens, idx, opts)
+  }
+  md.renderer.rules.table_close = (tokens, idx, opts, env, self) => self.renderToken(tokens, idx, opts) + '</div>\n'
 
   /* headings get a quiet anchor link */
   const defaultHeadingClose = md.renderer.rules.heading_close ||
@@ -306,6 +348,71 @@ export function splitFrontMatter (source) {
   }
 }
 
+/* ------------------------------------------------------- front matter */
+
+const unquote = (v) => {
+  const t = v.trim()
+  return /^(['"]).*\1$/.test(t) ? t.slice(1, -1) : t
+}
+
+/**
+ * The flat subset of YAML that front matter almost always is: `key: value`,
+ * `key: [a, b]`, a `- item` list, or a `|` / `>` block. Anything else returns
+ * null and the block is shown as raw text instead of being half-understood.
+ */
+export function parseFrontMatter (text) {
+  const fields = []
+  const lines = text.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line.trim() || /^\s*#/.test(line)) continue
+    const m = /^([^\s:#][^:]*):(?:\s+(.*))?$/.exec(line)
+    if (!m) return null
+    const key = m[1].trim()
+    const raw = (m[2] || '').trim()
+    if (/^\[.*\]$/.test(raw)) {
+      fields.push({ key, value: raw.slice(1, -1).split(',').map(unquote).filter(Boolean) })
+    } else if (raw === '' || raw === '|' || raw === '>' || raw === '|-' || raw === '>-') {
+      const items = []
+      const block = []
+      while (i + 1 < lines.length && (/^\s+\S/.test(lines[i + 1]) || !lines[i + 1].trim())) {
+        const next = lines[++i]
+        if (!next.trim()) { block.push(''); continue }
+        const item = /^\s+-\s+(.*)$/.exec(next)
+        if (item && raw === '') items.push(unquote(item[1]))
+        else block.push(next.trim())
+      }
+      if (items.length) fields.push({ key, value: items })
+      else fields.push({ key, value: block.join(raw.startsWith('>') ? ' ' : '\n').trim() })
+    } else {
+      fields.push({ key, value: unquote(raw) })
+    }
+  }
+  return fields.length ? fields : null
+}
+
+function frontMatterValue (value) {
+  if (Array.isArray(value)) {
+    return value.map((v) => `<span class="fm-tag" dir="${firstStrongDirection(v)}">${escapeAttr(v)}</span>`).join('')
+  }
+  if (/^https?:\/\/\S+$/i.test(value)) {
+    return `<a href="${escapeAttr(value)}" data-external="1" dir="ltr">${escapeAttr(value)}</a>`
+  }
+  return escapeAttr(value)
+}
+
+function renderFrontMatter (text) {
+  const fields = parseFrontMatter(text)
+  if (!fields) return `<div class="front-matter" dir="ltr" data-line="0">${escapeAttr(text)}</div>`
+  const rows = fields.map(({ key, value }) => {
+    const dir = Array.isArray(value) ? 'auto' : firstStrongDirection(value)
+    return `<div class="fm-row"><dt dir="ltr">${escapeAttr(key)}</dt><dd dir="${dir}">${frontMatterValue(value)}</dd></div>`
+  }).join('')
+  const dir = dominantDirection(fields.map(({ value }) => [].concat(value).join(' ')).join(' '))
+  return `<div class="fm-card" dir="${dir}" data-line="0"><dl>${rows}</dl>` +
+    `<details class="fm-raw"><summary>YAML</summary><pre dir="ltr">${escapeAttr(text)}</pre></details></div>`
+}
+
 const purifyConfig = {
   ADD_ATTR: ['dir', 'target', 'align', 'data-line', 'data-src', 'data-copy', 'data-external', 'data-relative', 'colspan', 'rowspan', 'start', 'checked', 'disabled', 'type'],
   ADD_TAGS: ['math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'mfrac', 'msqrt', 'mstyle', 'mtext', 'munderover', 'mover', 'munder'],
@@ -327,9 +434,7 @@ export function renderMarkdown (md, source, { baseDir = null, sanitize = true } 
     // shift data-line values back so scroll sync matches the real file
     html = html.replace(/data-line="(\d+)"/g, (_m, n) => `data-line="${Number(n) + offset}"`)
   }
-  if (frontMatter) {
-    html = `<div class="front-matter" dir="ltr" data-line="0">${escapeAttr(frontMatter)}</div>` + html
-  }
+  if (frontMatter) html = renderFrontMatter(frontMatter) + html
   if (sanitize) {
     html = DOMPurify.sanitize(html, { ...purifyConfig, FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form'] })
   }

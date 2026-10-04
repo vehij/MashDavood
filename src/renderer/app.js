@@ -1,6 +1,7 @@
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
 import { createRenderer, renderMarkdown, extractOutline, documentStats, detectDirection, toFileUrl } from './markdown.js'
+import { initUpdates, checkForUpdates } from './updates.js'
 import { MarkdownEditor } from './editor.js'
 import { WELCOME_DOC } from './welcome.js'
 
@@ -29,7 +30,11 @@ const el = {
   modalBackdrop: $('#modal-backdrop'),
   modal: $('#modal'),
   toasts: $('#toasts'),
-  viewmode: $('#viewmode')
+  viewmode: $('#viewmode'),
+  previewTools: $('#preview-tools'),
+  quickPanel: $('#quick-panel'),
+  ptCopy: $('#pt-copy'),
+  ptQuick: $('#pt-quick')
 }
 
 const md = createRenderer()
@@ -135,6 +140,7 @@ function applyTypography () {
   root.setProperty('--editor-font-size', s.editorFontSize + 'px')
   root.setProperty('--preview-line-height', String(s.lineHeight))
   root.setProperty('--content-width', s.contentWidth + 'px')
+  el.preview.classList.toggle('justify', !!s.justify)
 }
 
 /* ------------------------------------------------------------ view mode */
@@ -160,7 +166,9 @@ function setDirection (dir) {
   const tab = activeTab()
   const effective = dir === 'auto' ? (tab ? tab.dir : 'ltr') : dir
   el.app.dataset.dir = effective
-  el.preview.setAttribute('dir', dir === 'auto' ? 'auto' : dir)
+  // the document's direction, not dir="auto": auto ignores children that carry their own
+  // dir (all blocks do), so it always resolved LTR for the few that don't
+  el.preview.setAttribute('dir', effective)
   el.stDir.textContent = 'dir: ' + dir + (dir === 'auto' ? ` (${effective})` : '')
   api.settings.merge({ direction: dir })
 }
@@ -317,6 +325,16 @@ async function saveTabAs (tab) {
   return true
 }
 
+/** Save every modified tab; false if the user cancelled one (e.g. a Save As dialog). */
+async function saveAllDirty () {
+  const current = activeTab()
+  if (current) current.content = editor.getValue()
+  for (const tab of state.tabs) {
+    if (tab.dirty && !(await saveTab(tab))) return false
+  }
+  return true
+}
+
 const autosave = debounce(() => {
   const tab = activeTab()
   if (state.settings.autosave && tab && tab.path && tab.dirty) saveTab(tab)
@@ -360,6 +378,7 @@ function renderPreview (immediate = false) {
   const source = tab.id === state.activeId ? editor.getValue() : tab.content
   const html = renderMarkdown(md, source, { baseDir: tab.path ? dirname(tab.path) : null })
   el.preview.innerHTML = html
+  decorateTables(tab)
   state.lineMap = []
   renderMermaid()
   const outline = extractOutline(source)
@@ -393,6 +412,238 @@ function renderOutline (outline) {
     })
     el.sideOutline.appendChild(btn)
   }
+}
+
+/* ------------------------------------------------------ table columns */
+
+/* Column widths are a view setting, like font size: they live in settings.json
+   (per file, per table), never in the Markdown. A table is identified by its
+   header row plus its position among tables with the same header, so editing
+   text elsewhere in the file does not lose the widths. */
+
+const MIN_COL = 48
+
+function tableWidthsFor (tab, create = false) {
+  if (!tab) return null
+  if (!tab.path) {
+    if (!tab.tableWidths && create) tab.tableWidths = {}
+    return tab.tableWidths || null
+  }
+  const all = state.settings.tableWidths || (state.settings.tableWidths = {})
+  if (!all[tab.path] && create) all[tab.path] = {}
+  return all[tab.path] || null
+}
+
+function persistTableWidths (tab) {
+  if (!tab?.path) return
+  const all = state.settings.tableWidths
+  if (all[tab.path] && !Object.keys(all[tab.path]).length) delete all[tab.path]
+  api.settings.merge({ tableWidths: all })
+}
+
+const headerRow = (table) => table.tHead?.rows[0] || table.rows[0] || null
+
+function setColumnWidths (table, widths) {
+  let group = table.querySelector(':scope > colgroup')
+  if (!group) { group = document.createElement('colgroup'); table.prepend(group) }
+  const total = widths.reduce((a, b) => a + b, 0)
+  group.replaceChildren(...widths.map((w) => {
+    const col = document.createElement('col')
+    col.style.width = (w / total * 100).toFixed(3) + '%'
+    return col
+  }))
+  table.classList.add('has-colwidths')
+  table.style.setProperty('--table-w', total.toFixed(1) + 'px')
+}
+
+function decorateTables (tab) {
+  const saved = tableWidthsFor(tab) || {}
+  const seen = new Map()
+  for (const table of el.preview.querySelectorAll('table')) {
+    const row = headerRow(table)
+    if (!row) continue
+    const head = [...row.cells].map((c) => c.textContent.trim()).join('|')
+    const n = seen.get(head) || 0
+    seen.set(head, n + 1)
+    table.dataset.key = head + '#' + n
+    const widths = saved[table.dataset.key]
+    if (Array.isArray(widths) && widths.length === row.cells.length) setColumnWidths(table, widths)
+    for (const cell of row.cells) {
+      const handle = document.createElement('span')
+      handle.className = 'col-resizer'
+      handle.title = 'Drag to resize · double-click to reset'
+      cell.appendChild(handle)
+    }
+  }
+}
+
+/** Narrowest each column can be without splitting a word: lay the table out once at min-content. */
+function minContentWidths (table, cells) {
+  const group = table.querySelector(':scope > colgroup')
+  const fixed = table.classList.contains('has-colwidths')
+  group?.remove()
+  table.classList.remove('has-colwidths')
+  const prev = table.style.width
+  table.style.width = '1px'
+  const mins = cells.map((c) => Math.ceil(c.getBoundingClientRect().width))
+  table.style.width = prev
+  if (group) table.prepend(group)
+  if (fixed) table.classList.add('has-colwidths')
+  return mins
+}
+
+function startColumnResize (e, handle) {
+  e.preventDefault()
+  e.stopPropagation()
+  const cell = handle.parentElement
+  const table = cell.closest('table')
+  const wrap = table.closest('.table-wrap') || table.parentElement
+  const cells = [...cell.parentElement.cells]
+  const index = cells.indexOf(cell)
+  const rtl = getComputedStyle(wrap).direction === 'rtl'
+  // +3: fixed layout loses a pixel or two to collapsed borders and percentage rounding
+  const mins = minContentWidths(table, cells).map((m) => Math.max(MIN_COL, m + 3))
+  const base = cells.map((c, j) => Math.max(mins[j], c.getBoundingClientRect().width))
+  const sum = (list) => list.reduce((a, b) => a + b, 0)
+  // the table may grow until it fills the column (or stays as wide as it already was);
+  // past that, a wider column takes the space from its neighbours, nearest first
+  const pad = getComputedStyle(wrap)
+  const room = wrap.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight)
+  const maxTotal = Math.max(room, sum(base))
+  const keys = [...base.keys()]
+  const donors = keys.filter((j) => j > index).concat(keys.filter((j) => j < index).reverse())
+  let widths = base.slice()
+  const startX = e.clientX
+  const start = base[index]
+  const tab = activeTab()
+  handle.classList.add('dragging')
+  el.preview.classList.add('resizing-cols')
+
+  const move = (ev) => {
+    const dx = rtl ? startX - ev.clientX : ev.clientX - startX
+    const next = base.slice()
+    next[index] = Math.max(mins[index], start + dx)
+    let excess = sum(next) - maxTotal
+    for (const j of donors) {
+      if (excess <= 0) break
+      const give = Math.min(excess, Math.max(0, next[j] - mins[j]))
+      next[j] -= give
+      excess -= give
+    }
+    if (excess > 0) next[index] -= excess
+    widths = next
+    setColumnWidths(table, widths)
+  }
+  const up = () => {
+    document.removeEventListener('mousemove', move)
+    document.removeEventListener('mouseup', up)
+    handle.classList.remove('dragging')
+    el.preview.classList.remove('resizing-cols')
+    state.lineMap = []
+    if (widths.every((w, j) => w === base[j])) return
+    tableWidthsFor(tab, true)[table.dataset.key] = widths.map((w) => Math.round(w))
+    persistTableWidths(tab)
+  }
+  document.addEventListener('mousemove', move)
+  document.addEventListener('mouseup', up)
+}
+
+function resetColumnWidths (handle) {
+  const table = handle.closest('table')
+  const tab = activeTab()
+  const saved = tableWidthsFor(tab)
+  if (saved) { delete saved[table.dataset.key]; persistTableWidths(tab) }
+  table.querySelector(':scope > colgroup')?.remove()
+  table.classList.remove('has-colwidths')
+  table.style.removeProperty('--table-w')
+  state.lineMap = []
+}
+
+/* ------------------------------------------------------------ copying */
+
+/** The preview as a reader sees it, minus the app's own controls. */
+function cleanPreviewClone () {
+  const clone = el.preview.cloneNode(true)
+  clone.querySelectorAll('.copy-btn, .heading-anchor, .col-resizer, .code-lang, .mermaid-source, .fm-raw')
+    .forEach((n) => n.remove())
+  // KaTeX markup only makes sense with its stylesheet; carry the TeX source instead
+  clone.querySelectorAll('[data-tex]').forEach((m) => {
+    const display = m.tagName === 'DIV'
+    const node = document.createElement(display ? 'p' : 'span')
+    node.setAttribute('dir', 'ltr')
+    node.textContent = display ? `$$${m.dataset.tex}$$` : `$${m.dataset.tex}$`
+    m.replaceWith(node)
+  })
+  // front-matter tags are separate badges on screen; as text they need separators
+  clone.querySelectorAll('.fm-card dd').forEach((dd) => {
+    const tags = [...dd.querySelectorAll('.fm-tag')].map((t) => t.textContent)
+    if (tags.length) dd.textContent = tags.join(' · ')
+  })
+  clone.querySelectorAll('[data-line], [data-key], [data-rendered], [data-src]').forEach((n) => {
+    n.removeAttribute('data-line'); n.removeAttribute('data-key'); n.removeAttribute('data-rendered'); n.removeAttribute('data-src')
+  })
+  return clone
+}
+
+/* Pasted into Word / Google Docs / mail, class names mean nothing: give the
+   few things that need it a minimal inline style. */
+const PASTE_STYLES = {
+  table: 'border-collapse:collapse;margin:8px 0',
+  'th, td': 'border:1px solid #c9ccd1;padding:4px 10px;vertical-align:middle',
+  th: 'background:#f2f2f0;font-weight:bold',
+  pre: 'background:#f4f4f2;padding:10px 12px;border-radius:6px;direction:ltr;text-align:left;white-space:pre-wrap;font-family:Menlo,Consolas,monospace;font-size:12px',
+  code: 'font-family:Menlo,Consolas,monospace;direction:ltr;unicode-bidi:isolate',
+  blockquote: 'border-inline-start:3px solid #c9ccd1;margin:8px 0;padding:2px 12px;color:#4b5058',
+  mark: 'background:#fff2a8'
+}
+
+async function copyPreview ({ source = false } = {}) {
+  const tab = activeTab()
+  if (!tab) return
+  if (source) {
+    await writeClipboard({ text: editor.getValue() })
+    flashCopied('Markdown copied')
+    return
+  }
+  const clone = cleanPreviewClone()
+  for (const [sel, css] of Object.entries(PASTE_STYLES)) {
+    clone.querySelectorAll(sel).forEach((n) => { n.setAttribute('style', css + ';' + (n.getAttribute('style') || '')) })
+  }
+  const dir = state.settings.direction === 'auto' ? tab.dir : state.settings.direction
+  const html = `<div dir="${dir}" style="font-family:Estedad,Tahoma,sans-serif;line-height:1.8">${clone.innerHTML}</div>`
+
+  // innerText only follows the layout (table cells → tabs, blocks → newlines)
+  // for an element that is actually rendered, so measure the clone off-screen
+  const probe = cleanPreviewClone()
+  probe.className = 'markdown-body'
+  probe.style.cssText = 'position:fixed;left:-20000px;top:0;width:800px;max-width:none'
+  document.body.appendChild(probe)
+  const text = probe.innerText.replace(/\n{3,}/g, '\n\n').trim()
+  probe.remove()
+
+  await writeClipboard({ text, html })
+  flashCopied('Copied')
+}
+
+/** Rich + plain text in one clipboard entry: Word/Docs take the HTML, plain editors the text. */
+async function writeClipboard ({ text, html = null }) {
+  try {
+    const parts = { 'text/plain': new Blob([text], { type: 'text/plain' }) }
+    if (html) parts['text/html'] = new Blob([html], { type: 'text/html' })
+    await navigator.clipboard.write([new ClipboardItem(parts)])
+  } catch (e) {
+    toast('Copy failed: ' + e.message, 'error')
+    throw e
+  }
+}
+
+function flashCopied (label) {
+  const btn = el.ptCopy
+  const text = btn.querySelector('.pt-label')
+  btn.classList.add('done')
+  text.textContent = label
+  clearTimeout(btn._t)
+  btn._t = setTimeout(() => { btn.classList.remove('done'); text.textContent = 'Copy' }, 1400)
 }
 
 /* -------------------------------------------------------- scroll sync */
@@ -584,6 +835,13 @@ function collectCss () {
   return css
 }
 
+/** Preview markup for export: the colgroup widths stay, the drag handles go. */
+function exportBody () {
+  const clone = el.preview.cloneNode(true)
+  clone.querySelectorAll('.col-resizer').forEach((n) => n.remove())
+  return clone.innerHTML
+}
+
 async function doExport (kind, outPath = null) {
   const tab = activeTab()
   if (!tab) return
@@ -597,9 +855,14 @@ async function doExport (kind, outPath = null) {
   const title = tab.name.replace(/\.[^.]+$/, '')
   const payload = {
     title,
-    body: el.preview.innerHTML,
+    body: exportBody(),
     css: collectCss(),
     dir: state.settings.direction === 'auto' ? tab.dir : state.settings.direction,
+    typography: {
+      fontSize: state.settings.fontSize,
+      lineHeight: state.settings.lineHeight,
+      justify: !!state.settings.justify
+    },
     defaultPath: tab.path ? tab.path.replace(/\.[^.]+$/, '') + (kind === 'pdf' ? '.pdf' : '.html') : null,
     outPath
   }
@@ -630,6 +893,7 @@ function openModal (html, afterMount) {
 
 function settingsModal () {
   const s = state.settings
+  const closeSettings = () => el.modalBackdrop.classList.add('hidden')
   openModal(`
     <h2>Settings</h2>
     <div class="row"><label>Theme<span class="hint">تم روشن، تیره یا تبعیت از سیستم</span></label>
@@ -651,6 +915,12 @@ function settingsModal () {
     <div class="row"><label>Autosave<span class="hint">ذخیره خودکار پس از توقف تایپ</span></label>
       <input type="checkbox" id="set-autosave"></div>
     <div class="row"><label>Spellcheck in editor</label><input type="checkbox" id="set-spell"></div>
+    <div class="row"><label>Justify paragraphs<span class="hint">تراز دوطرفه در پیش‌نمایش و خروجی</span></label>
+      <input type="checkbox" id="set-justify"></div>
+    <div class="row"><label>Check for updates automatically<span class="hint">اطلاع از نسخه‌ی جدید هنگام باز شدن برنامه</span></label>
+      <input type="checkbox" id="set-updates"></div>
+    <div class="row"><label>Version<span class="hint">نسخه‌ی نصب‌شده</span></label>
+      <span><span class="version" id="set-version"></span><button class="small" id="set-check">Check now</button></span></div>
     <div class="modal-foot"><button data-close>Done</button></div>
   `, (root) => {
     const bind = (id, key, fmt = (v) => v, apply = () => {}) => {
@@ -686,7 +956,84 @@ function settingsModal () {
     const spell = root.querySelector('#set-spell')
     spell.checked = !!s.spellcheck
     spell.addEventListener('change', () => { s.spellcheck = spell.checked; api.settings.merge({ spellcheck: spell.checked }); editor.setSpellcheck(spell.checked) })
+    const justify = root.querySelector('#set-justify')
+    justify.checked = !!s.justify
+    justify.addEventListener('change', () => setReadingOption('justify', justify.checked))
+    const updates = root.querySelector('#set-updates')
+    updates.checked = s.checkUpdates !== false
+    updates.addEventListener('change', () => { s.checkUpdates = updates.checked; api.settings.merge({ checkUpdates: updates.checked }) })
+    root.querySelector('#set-version').textContent = 'v' + (state.version || '')
+    root.querySelector('#set-check').addEventListener('click', () => { closeSettings(); checkForUpdates() })
   })
+}
+
+/* ------------------------------------------------- quick reading panel */
+
+const QUICK_DEFAULTS = { fontSize: 16, lineHeight: 1.9, contentWidth: 780, justify: false }
+
+function setReadingOption (key, value) {
+  state.settings[key] = value
+  api.settings.merge({ [key]: value })
+  applyTypography()
+  state.lineMap = []
+}
+
+function renderQuickPanel () {
+  const s = state.settings
+  const dir = s.direction
+  el.quickPanel.innerHTML = `
+    <div class="qp-row"><span class="qp-label">Direction<small>جهت متن</small></span>
+      <div class="segmented" id="qp-dir">
+        ${['auto', 'rtl', 'ltr'].map((d) => `<button data-dir="${d}" class="${d === dir ? 'active' : ''}">${d === 'auto' ? 'Auto' : d.toUpperCase()}</button>`).join('')}
+      </div></div>
+    <div class="qp-row"><span class="qp-label">Font size<small>اندازه فونت</small></span>
+      <span class="qp-step" data-key="fontSize" data-step="1" data-min="11" data-max="30" data-unit="px">
+        <button data-d="-1" aria-label="Smaller">−</button><output></output><button data-d="1" aria-label="Larger">+</button></span></div>
+    <div class="qp-row"><span class="qp-label">Line height<small>فاصله خطوط</small></span>
+      <span class="qp-step" data-key="lineHeight" data-step="0.1" data-min="1.3" data-max="2.6" data-unit="">
+        <button data-d="-1" aria-label="Tighter">−</button><output></output><button data-d="1" aria-label="Looser">+</button></span></div>
+    <div class="qp-row"><span class="qp-label">Width<small>عرض متن</small></span>
+      <span class="qp-step" data-key="contentWidth" data-step="40" data-min="560" data-max="1240" data-unit="px">
+        <button data-d="-1" aria-label="Narrower">−</button><output></output><button data-d="1" aria-label="Wider">+</button></span></div>
+    <div class="qp-row"><span class="qp-label">Justify<small>تراز دوطرفه پاراگراف‌ها</small></span>
+      <input type="checkbox" class="qp-switch" id="qp-justify" ${s.justify ? 'checked' : ''}></div>
+    <div class="qp-foot"><button id="qp-reset">Reset · پیش‌فرض</button><button id="qp-more">More settings…</button></div>`
+
+  const sync = () => el.quickPanel.querySelectorAll('.qp-step').forEach((step) => {
+    const v = Number(state.settings[step.dataset.key])
+    step.querySelector('output').textContent = (step.dataset.key === 'lineHeight' ? v.toFixed(1) : v) + step.dataset.unit
+  })
+  sync()
+  el.quickPanel.querySelectorAll('.qp-step button').forEach((b) => b.addEventListener('click', () => {
+    const step = b.closest('.qp-step')
+    const { key } = step.dataset
+    const inc = Number(step.dataset.step) * Number(b.dataset.d)
+    const next = Math.min(Number(step.dataset.max), Math.max(Number(step.dataset.min), Number(state.settings[key]) + inc))
+    setReadingOption(key, Math.round(next * 100) / 100)
+    sync()
+  }))
+  el.quickPanel.querySelectorAll('#qp-dir button').forEach((b) => b.addEventListener('click', () => {
+    setDirection(b.dataset.dir)
+    el.quickPanel.querySelectorAll('#qp-dir button').forEach((x) => x.classList.toggle('active', x === b))
+  }))
+  el.quickPanel.querySelector('#qp-justify').addEventListener('change', (e) => setReadingOption('justify', e.target.checked))
+  el.quickPanel.querySelector('#qp-reset').addEventListener('click', () => {
+    Object.assign(state.settings, QUICK_DEFAULTS)
+    api.settings.merge(QUICK_DEFAULTS)
+    applyTypography()
+    renderQuickPanel()
+  })
+  el.quickPanel.querySelector('#qp-more').addEventListener('click', () => { toggleQuickPanel(false); settingsModal() })
+}
+
+function toggleQuickPanel (open = el.quickPanel.classList.contains('hidden')) {
+  if (open) {
+    if (state.settings.viewMode === 'editor') setViewMode('split')
+    renderQuickPanel()
+  }
+  el.quickPanel.classList.toggle('hidden', !open)
+  el.previewTools.classList.toggle('open', open)
+  el.ptQuick.classList.toggle('on', open)
 }
 
 function shortcutsModal () {
@@ -699,7 +1046,8 @@ function shortcutsModal () {
     ['Inline code / Code block', '⇧⌘C / ⌥⌘C'], ['Heading 1–3', '⌥⌘1–3'],
     ['Bullet / numbered / task list', '⇧⌘8 / ⇧⌘7 / ⇧⌘9'], ['Quote', '⇧⌘.'],
     ['Table / Mermaid diagram', '⌥⌘T / ⌥⌘M'], ['Export PDF / HTML', '⌘P / ⇧⌘E'],
-    ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'], ['Reveal in Finder', '⌥⌘R']
+    ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'], ['Reveal in Finder', '⌥⌘R'],
+    ['Copy document as shown / as Markdown', '⌥⇧⌘C / ⌥⇧⌘M'], ['Reading settings panel', '⌥⌘,']
   ]
   openModal(`<h2>Keyboard Shortcuts</h2><table>${rows.map(([a, b]) => `<tr><td>${a}</td><td>${keys(b)}</td></tr>`).join('')}</table><div class="modal-foot"><button data-close>Close</button></div>`)
 }
@@ -751,6 +1099,10 @@ async function handleMenu ({ action }) {
     case 'zoom:in': zoom(1); break
     case 'zoom:out': zoom(-1); break
     case 'zoom:reset': zoom(0); break
+    case 'copyRendered': copyPreview(); break
+    case 'copyMarkdown': copyPreview({ source: true }); break
+    case 'quickSettings': toggleQuickPanel(); break
+    case 'checkUpdates': checkForUpdates(); break
   }
 }
 
@@ -796,8 +1148,25 @@ function wireUi () {
 
   el.sideSearch.addEventListener('input', () => { state.filter = el.sideSearch.value.trim(); renderTree() })
 
+  // floating preview tools: copy + reading settings
+  el.ptCopy.addEventListener('click', (e) => copyPreview({ source: e.shiftKey }))
+  el.ptQuick.addEventListener('click', () => toggleQuickPanel())
+  document.addEventListener('mousedown', (e) => {
+    if (!el.quickPanel.classList.contains('hidden') && !e.target.closest('#preview-tools')) toggleQuickPanel(false)
+  })
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !el.quickPanel.classList.contains('hidden')) { toggleQuickPanel(false); e.preventDefault() }
+  })
+
+  // column resizing in preview tables
+  el.preview.addEventListener('mousedown', (e) => {
+    const handle = e.target.closest('.col-resizer')
+    if (handle && e.button === 0) startColumnResize(e, handle)
+  })
+
   // preview interactions
   el.preview.addEventListener('click', (e) => {
+    if (e.target.closest('.col-resizer')) { e.preventDefault(); return }
     const copy = e.target.closest('[data-copy]')
     if (copy) {
       const code = copy.closest('.code-wrap')?.querySelector('code')
@@ -825,6 +1194,8 @@ function wireUi () {
 
   // double click in preview jumps the editor to that line
   el.preview.addEventListener('dblclick', (e) => {
+    const handle = e.target.closest('.col-resizer')
+    if (handle) { e.preventDefault(); resetColumnWidths(handle); return }
     const node = e.target.closest('[data-line]')
     if (!node || state.settings.viewMode === 'preview') return
     editor.cursorToLine(Number(node.dataset.line))
@@ -935,9 +1306,10 @@ function renderRecent (settings) {
 /* ---------------------------------------------------------------- boot */
 
 async function boot () {
-  const { settings, queued, home } = await api.ready()
+  const { settings, queued, home, version } = await api.ready()
   state.settings = settings
   state.home = home
+  state.version = version
 
   applyTypography()
   await applyTheme(settings.theme)
@@ -959,6 +1331,7 @@ async function boot () {
       tab.dir = detectDirection(value)
       if (state.settings.direction === 'auto') {
         el.app.dataset.dir = tab.dir
+        el.preview.setAttribute('dir', tab.dir)
         el.stDir.textContent = `dir: auto (${tab.dir})`
       }
       scheduleRender()
@@ -983,6 +1356,7 @@ async function boot () {
   localiseShortcutHints()
   wireUi()
   wireIpc()
+  initUpdates({ api, state, openModal, toast, renderNotes: (text) => renderMarkdown(md, text), saveAllDirty })
   renderTree()
   renderTabs()
   renderRecent(settings)
