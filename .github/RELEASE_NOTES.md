@@ -19,6 +19,13 @@
 
 ## تغییرات
 
+**۱.۱.۱**
+
+- **macOS: دیگر پیام «MashDavood is damaged» نمی‌آید.** برنامه حالا امضای محلی (ad-hoc) دارد،
+  پس بار اول پیام معمولی «Apple could not verify…» می‌آید و در
+  **System Settings ← Privacy & Security** دکمه‌ی **Open Anyway** هست — بدون Terminal.
+- اگر ۱.۱.۰ را دارید، همین نسخه را از داخل برنامه (دکمه‌ی آبی بالای پنجره) نصب کنید.
+
 **۱.۱.۰**
 
 - **به‌روزرسانی از داخل برنامه**: نسخه‌ی جدید که منتشر شود، دکمه‌ی آبی بالای پنجره ظاهر می‌شود.
@@ -71,7 +78,8 @@ SmartScreen جلوی اجرا را بگیرد. این درباره‌ی محتو
 بازگرداندن فایل از قرنطینه‌ی Defender، بررسی چک‌سام):
 **[docs/WINDOWS.md](https://github.com/vehij/MashDavood/blob/main/docs/WINDOWS.md)**
 
-روی **macOS** اگر برنامه باز نشد:
+روی **macOS** بار اول: *Done* ← **System Settings ← Privacy & Security** ← **Open Anyway**.
+اگر پیام «is damaged» دیدید (نسخه‌های قبل از ۱.۱.۱):
 `xattr -dr com.apple.quarantine /Applications/MashDavood.app`
 
 ## امکانات
