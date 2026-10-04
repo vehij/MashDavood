@@ -45,9 +45,11 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            # a manual publish must never re-use a version that is already out
-            if [[ "$GITHUB_REF" != refs/tags/* ]]; then
-              echo "::error::$TAG is already released — bump the version in package.json"
+            # a manual publish may resume its own half-finished release, but never put
+            # a different commit under a version that is already out
+            tagged=$(git ls-remote origin "refs/tags/$TAG" | cut -f1)
+            if [[ "$GITHUB_REF" != refs/tags/* && -n "$tagged" && "$tagged" != "$GITHUB_SHA" ]]; then
+              echo "::error::$TAG is already released from $tagged — bump the version in package.json"
               exit 1
             fi
             exit 0
