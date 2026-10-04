@@ -320,3 +320,77 @@ kbd {
 }
 .toast.error { border-color: var(--danger); color: var(--danger); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ------------------------------------------------------- update pill */
+.update-pill {
+  -webkit-app-region: no-drag;
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 8px;
+  border: none; border-radius: 99px; background: var(--accent); color: #fff;
+  font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.update-pill:hover { filter: brightness(1.08); }
+.update-pill.hidden { display: none; }
+
+/* -------------------------------------------- floating preview tools */
+.pane-preview { position: relative; }
+.preview-tools {
+  position: absolute; top: 10px; right: 20px; z-index: 6;
+  display: flex; align-items: center; gap: 2px; padding: 2px;
+  background: color-mix(in srgb, var(--bg-elev) 88%, transparent); backdrop-filter: blur(6px);
+  border: 1px solid var(--border); border-radius: 9px; opacity: .5; transition: opacity .15s;
+}
+.preview-tools:hover, .preview-tools.open, .preview-tools:focus-within { opacity: 1; }
+.app[data-view='editor'] .preview-tools { display: none; }
+.pt-btn {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 7px;
+  border: none; border-radius: 7px; background: transparent; color: var(--text-soft);
+  font-size: 11.5px; cursor: pointer;
+}
+.pt-btn:hover, .pt-btn.on { background: var(--bg-hover); color: var(--text); }
+.pt-btn.done { color: #2ea27a; }
+.pt-aa { font-weight: 800; font-size: 12.5px; letter-spacing: -.02em; }
+
+.quick-panel {
+  position: absolute; top: calc(100% + 6px); right: 0; width: 272px;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow);
+  padding: 12px 14px 10px; font-size: 12.5px; cursor: default;
+}
+.quick-panel.hidden { display: none; }
+.qp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
+.qp-row + .qp-row { border-top: 1px solid var(--border); }
+.qp-label { display: flex; flex-direction: column; line-height: 1.35; }
+.qp-label small { color: var(--text-dim); font-size: 11px; }
+.qp-step { display: inline-flex; align-items: center; gap: 4px; }
+.qp-step button {
+  width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg);
+  cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+}
+.qp-step button:hover { border-color: var(--accent); color: var(--accent); }
+.qp-step output { min-width: 40px; text-align: center; color: var(--text-soft); font-size: 12px; }
+.quick-panel .segmented button { width: auto; padding: 0 8px; font-size: 11.5px; }
+.qp-switch { width: 30px; height: 18px; accent-color: var(--accent); }
+.qp-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.qp-foot button {
+  border: none; background: transparent; color: var(--text-dim); font-size: 11.5px; cursor: pointer; padding: 3px 4px; border-radius: 5px;
+}
+.qp-foot button:hover { color: var(--accent); background: var(--bg-hover); }
+
+/* ------------------------------------------------------ update modal */
+.update-notes {
+  max-height: 46vh; overflow: auto; margin: 4px 0 6px; padding: 4px 16px;
+  background: var(--bg-sunken); border-radius: 10px; border: 1px solid var(--border);
+}
+.update-notes.markdown-body { font-size: 13px; line-height: 1.8; padding: 6px 16px; max-width: none; }
+.update-notes.markdown-body h1, .update-notes.markdown-body h2 { font-size: 14px; margin: .8em 0 .4em; border: none; padding: 0; }
+.update-meta { color: var(--text-dim); font-size: 12px; margin: -8px 0 12px; }
+.update-progress { height: 6px; border-radius: 99px; background: var(--bg-sunken); overflow: hidden; margin: 12px 0 4px; }
+.update-progress > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.update-status { font-size: 12px; color: var(--text-soft); min-height: 1.4em; unicode-bidi: plaintext; text-align: start; }
+.update-status.error { color: var(--danger); }
+.modal .modal-foot .spacer { flex: 1; }
+.modal .modal-foot button:disabled { opacity: .5; cursor: default; }
+.modal .row .version { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-inline-end: 8px; }
+.modal .row button.small {
+  border: 1px solid var(--border); background: var(--bg); border-radius: 7px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+.modal .row button.small:hover { border-color: var(--accent); color: var(--accent); }

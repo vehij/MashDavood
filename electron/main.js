@@ -8,6 +8,7 @@ const fsp = require('fs/promises')
 const path = require('path')
 const os = require('os')
 const store = require('./store')
+const { createUpdater } = require('./updater')
 
 const isDev = !!process.env.MDREADER_DEV
 const isMac = process.platform === 'darwin'
@@ -17,6 +18,7 @@ let mainWindow = null
 const pendingOpen = []      // files requested before the window is ready
 let rendererReady = false
 const watchers = new Map()
+const updater = createUpdater({ store, send: (channel, payload) => send(channel, payload), beforeQuit: () => store.flush() })
 
 /* ------------------------------------------------------------------ window */
 
@@ -56,6 +58,12 @@ function createWindow () {
     if (/^https?:/.test(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
+  // a stray link click must never navigate the app window away from the app
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url === mainWindow.webContents.getURL()) return
+    event.preventDefault()
+    if (/^https?:/.test(url)) shell.openExternal(url)
+  })
 }
 
 function send (channel, payload) {
@@ -75,6 +83,7 @@ function buildMenu () {
           label: app.name,
           submenu: [
             { role: 'about', label: 'About MashDavood' },
+            { label: 'Check for Updates…', click: menuAction('checkUpdates') },
             { type: 'separator' },
             { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: menuAction('settings') },
             { type: 'separator' },
@@ -122,6 +131,9 @@ function buildMenu () {
         { role: 'cut' }, { role: 'copy' }, { role: 'paste' },
         { role: 'pasteAndMatchStyle' }, { role: 'selectAll' },
         { type: 'separator' },
+        { label: 'Copy Document (as shown)', accelerator: 'CmdOrCtrl+Alt+Shift+C', click: menuAction('copyRendered') },
+        { label: 'Copy Document as Markdown', accelerator: 'CmdOrCtrl+Alt+Shift+M', click: menuAction('copyMarkdown') },
+        { type: 'separator' },
         { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: menuAction('find') },
         { type: 'separator' },
         {
@@ -157,6 +169,7 @@ function buildMenu () {
         { type: 'separator' },
         { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+\\', click: menuAction('toggleSidebar') },
         { label: 'Toggle Theme', accelerator: 'CmdOrCtrl+Shift+L', click: menuAction('toggleTheme') },
+        { label: 'Reading Settings…', accelerator: 'CmdOrCtrl+Alt+,', click: menuAction('quickSettings') },
         { type: 'separator' },
         {
           label: 'Text Direction',
@@ -188,7 +201,9 @@ function buildMenu () {
       role: 'help',
       submenu: [
         { label: 'Keyboard Shortcuts', click: menuAction('shortcuts') },
-        { label: 'Open Welcome Document', click: menuAction('welcome') }
+        { label: 'Open Welcome Document', click: menuAction('welcome') },
+        ...(isMac ? [] : [{ type: 'separator' }, { label: 'Check for Updates…', click: menuAction('checkUpdates') }]),
+        { label: 'Release Notes', click: () => shell.openExternal('https://github.com/vehij/MashDavood/releases') }
       ]
     }
   ]
@@ -323,8 +338,13 @@ function unwatchFile (filePath) {
 ipcMain.handle('app:ready', () => {
   rendererReady = true
   const queued = pendingOpen.splice(0)
-  return { settings: store.all(), queued, isDev, home: os.homedir() }
+  return { settings: store.all(), queued, isDev, home: os.homedir(), version: app.getVersion() }
 })
+
+ipcMain.handle('update:check', () => updater.check())
+ipcMain.handle('update:download', () => updater.download())
+ipcMain.handle('update:install', () => updater.install())
+ipcMain.handle('update:skip', (_e, version) => updater.skip(version))
 
 ipcMain.handle('settings:merge', (_e, obj) => { store.merge(obj); return true })
 ipcMain.handle('settings:all', () => store.all())
@@ -414,8 +434,10 @@ function fontDataUri () {
   } catch { return '' }
 }
 
-function standaloneHtml ({ title, body, css, dir }) {
+function standaloneHtml ({ title, body, css, dir, typography = {} }) {
   const font = fontDataUri()
+  const size = Number(typography.fontSize) || 16
+  const lineHeight = Number(typography.lineHeight) || 1.9
   return `<!doctype html>
 <html lang="fa" dir="${dir || 'auto'}">
 <head>
@@ -432,13 +454,15 @@ body.export-body { display: block !important; padding: 0 !important; }
 .markdown-body { max-width: 100% !important; margin: 0 auto !important; padding: 0 !important; }
 .markdown-body .copy-btn, .markdown-body .heading-anchor, .markdown-body .code-lang { display: none !important; }
 .markdown-body .mermaid-source { display: none !important; }
+.markdown-body .col-resizer, .markdown-body .fm-raw { display: none !important; }
+:root { --preview-font-size: ${size}px; --preview-line-height: ${lineHeight}; }
 </style>
 </head>
-<body class="export-body"><article class="markdown-body" dir="${dir || 'auto'}">${body}</article></body>
+<body class="export-body"><article class="markdown-body${typography.justify ? ' justify' : ''}" dir="${dir || 'auto'}">${body}</article></body>
 </html>`
 }
 
-ipcMain.handle('export:html', async (_e, { title, body, css, dir, defaultPath, outPath }) => {
+ipcMain.handle('export:html', async (_e, { title, body, css, dir, typography, defaultPath, outPath }) => {
   let target = outPath
   if (!target) {
     const res = await dialog.showSaveDialog(mainWindow, {
@@ -448,11 +472,11 @@ ipcMain.handle('export:html', async (_e, { title, body, css, dir, defaultPath, o
     if (res.canceled || !res.filePath) return null
     target = res.filePath
   }
-  await fsp.writeFile(target, standaloneHtml({ title, body, css, dir }), 'utf8')
+  await fsp.writeFile(target, standaloneHtml({ title, body, css, dir, typography }), 'utf8')
   return target
 })
 
-ipcMain.handle('export:pdf', async (_e, { title, body, css, dir, defaultPath, outPath }) => {
+ipcMain.handle('export:pdf', async (_e, { title, body, css, dir, typography, defaultPath, outPath }) => {
   let target = outPath
   if (!target) {
     const res = await dialog.showSaveDialog(mainWindow, {
@@ -464,7 +488,7 @@ ipcMain.handle('export:pdf', async (_e, { title, body, css, dir, defaultPath, ou
   }
 
   const tmp = path.join(os.tmpdir(), `mashdavood-export-${Date.now()}.html`)
-  await fsp.writeFile(tmp, standaloneHtml({ title, body, css, dir }), 'utf8')
+  await fsp.writeFile(tmp, standaloneHtml({ title, body, css, dir, typography }), 'utf8')
 
   const win = new BrowserWindow({ show: false, webPreferences: { offscreen: true, javascript: false } })
   try {
@@ -511,6 +535,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = theme === 'system' ? 'system' : theme
   buildMenu()
   createWindow()
+  updater.start()
 
   // any paths passed on the command line
   const argPaths = process.argv.slice(isDev ? 2 : 1).filter((a) => !a.startsWith('-') && MD_EXT.includes(path.extname(a).slice(1).toLowerCase()))

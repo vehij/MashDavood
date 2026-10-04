@@ -35,8 +35,15 @@ contextBridge.exposeInMainWorld('api', {
   exportHtml: (opts) => invoke('export:html', opts),
   exportPdf: (opts) => invoke('export:pdf', opts),
 
+  updates: {
+    check: () => invoke('update:check'),
+    download: () => invoke('update:download'),
+    install: () => invoke('update:install'),
+    skip: (version) => invoke('update:skip', version)
+  },
+
   on: (channel, cb) => {
-    const allowed = ['menu:action', 'app:openFiles', 'app:openFolder', 'file:changed', 'file:removed', 'theme:changed']
+    const allowed = ['menu:action', 'app:openFiles', 'app:openFolder', 'file:changed', 'file:removed', 'theme:changed', 'update:available', 'update:progress']
     if (!allowed.includes(channel)) return () => {}
     const handler = (_e, payload) => cb(payload)
     ipcRenderer.on(channel, handler)

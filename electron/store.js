@@ -19,6 +19,11 @@ const DEFAULTS = {
   splitRatio: 0.5,
   autosave: true,
   spellcheck: false,
+  justify: false,            // justified paragraphs in preview + export
+  tableWidths: {},           // { [filePath]: { [tableKey]: [px, ...] } } — view only, never written to the .md
+  checkUpdates: true,
+  skippedVersion: null,
+  lastUpdateCheck: 0,
   seenWelcome: false,
   recentFiles: [],
   recentFolders: [],

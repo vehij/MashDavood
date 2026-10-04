@@ -36,7 +36,19 @@ reused a single state and `undo` could pull another tab's text into the current 
   starts with a Latin letter. `EditorView.perLineTextDirection` is enabled so CodeMirror measures
   each line with its own direction.
 - The app-level `data-dir` attribute (auto/rtl/ltr) only drives the container direction and the
-  "auto → estedad font" rule.
+  "auto → estedad font" rule. The preview root gets the document's *effective* direction, never
+  `dir="auto"`: auto skips children that carry their own `dir` (every block does), so it always
+  resolved LTR.
+- Tables and the front-matter card take the direction of the *majority* of their letters
+  (`dominantDirection`), so one English header cannot flip a Persian table. Cells keep their own
+  `dir` for text order, but `text-align` follows the table, so a column lines up on one side.
+- Persian/Arabic-Indic digits are weak characters and never decide a direction. A block with no
+  letters at all (`**۱.۲.۰**`, a price cell) gets `data-weak`: `unicode-bidi: plaintext` would
+  fall back to LTR there, so it is swapped for `isolate` and the block inherits (or is RTL when it
+  has Persian digits).
+- `overflow-wrap: break-word`, never `anywhere`, on the preview: `anywhere` also lowers the
+  min-content width, and auto-sized table columns then split Persian words (اطمینا|ن).
+- Inline `code` and KaTeX are `unicode-bidi: isolate`, so they never reorder the Persian around them.
 
 **Native selection, not `drawSelection()`.** CodeMirror's drawn selection layer computes its
 rectangles from its own bidi model and drifts on mixed RTL/LTR lines (the highlight lands a few
@@ -67,6 +79,54 @@ block (the app stylesheet fixes `html,body` height, which would otherwise clip t
 PDF goes through an offscreen `BrowserWindow` + `printToPDF`. Both handlers accept an optional
 `outPath` so they can be driven from a script without a save dialog.
 
+**Tables.** The `table_open` rule wraps every table in `<div class="table-wrap" dir>` (it scrolls;
+the table keeps real table layout). After each render `decorateTables` adds a `.col-resizer` to
+every header cell and re-applies saved widths. Widths are a *view* setting stored in
+`settings.json` → `tableWidths[filePath][tableKey]` (untitled tabs keep them on the tab); the
+`.md` is never touched. `tableKey` = header text joined + occurrence index among tables with the
+same header, so edits elsewhere in the file keep them. They are applied as a percentage
+`<colgroup>` plus `--table-w` (the dragged total) with `width: min(100%, var(--table-w))` and
+*auto* layout: proportions are honoured, but no column goes below its longest word — a narrow
+pane or the PDF page scales the table or scrolls it, it never splits words. While dragging, each
+column's floor is its min-content width (measured once by laying the table out at `width: 1px`);
+a column wider than the room takes space from its neighbours, nearest first. Exports keep the
+colgroup and drop the handles (`exportBody`).
+
+**Copying the document.** `copyPreview` clones the preview, drops the app's controls, swaps KaTeX
+for its TeX source (`data-tex`, emitted by the math renderers) and writes one `ClipboardItem` with
+`text/html` (minimal inline styles so Word/Docs keep table borders, wrapped in the document's `dir`)
+and `text/plain` (`innerText` of an off-screen copy, so table cells become tab-separated). This uses
+the renderer's `navigator.clipboard`: Electron 44's main-process `clipboard` is now the async W3C
+API and `clipboard.write({text, html})` silently writes nothing.
+
+**Reading panel / export typography.** The floating `Aa` panel edits the same settings as the
+Settings modal (`fontSize`, `lineHeight`, `contentWidth`, `justify`, direction). Exports receive
+`typography` and `standaloneHtml` emits a `:root` override, so the PDF uses the size and spacing
+on screen (the stylesheet alone only carries the defaults).
+
+**Updates (`electron/updater.js`).** No electron-updater: Squirrel.Mac refuses unsigned apps.
+Background check 8 s after start and every 6 h (setting `checkUpdates`, `skippedVersion`):
+`GET /repos/vehij/MashDavood/releases/latest`, compare `tag_name`. The installer name is picked
+like the README permalinks (`MashDavood-<arch>.dmg`, `-<arch>-Setup.exe`, `-x64-Portable.exe`,
+`-x64-win.zip`; Rosetta/ARM-emulated x64 builds pick arm64). A release is only announced once its
+asset exists (CI creates the release before uploading). Download via `net.fetch` with progress,
+size check, and SHA-256 against `SHA256SUMS-<os>.txt` when listed. Install:
+- Windows NSIS install (detected by `Uninstall MashDavood.exe` next to the exe): run the Setup with
+  `--updated /S --force-run` (electron-updater's own flags) and quit.
+- macOS: mount the dmg; a detached bash waits for this PID to exit, `ditto`s the new bundle next to
+  the old one, swaps them with two `mv`s (rolling back if the second fails), strips quarantine and
+  reopens. Read-only parent / translocated / running from the dmg → the dmg is opened for a manual
+  drag instead.
+- Portable / zip → saved to Downloads; Linux / unpackaged → release page.
+Files fetched by the app carry no quarantine flag / Mark of the Web, so the update does not trip
+Gatekeeper or SmartScreen again. The release notes shown are the `**x.y.z**` blocks of
+`## تغییرات` newer than the installed version.
+
+Testing without shipping a build: `MASHDAVOOD_UPDATE_TEST=win-setup@1.0.0 npx electron .` makes an
+unpackaged run behave like that install kind at that version (kinds: `mac`, `win-setup`,
+`win-portable`, `win-zip`). It downloads and verifies for real and stops just before installing.
+In a sandbox whose HTTPS proxy re-signs TLS, Chromium needs that CA in `~/.pki/nssdb`.
+
 **Sanitising.** `renderMarkdown` runs DOMPurify with data attributes allowed, `input[type=checkbox]`
 forced to `disabled`, and script/iframe/object/embed/form forbidden. Local images are rewritten to
 absolute `file://` URLs based on the document's directory.
@@ -88,5 +148,6 @@ node scripts/cdp.mjs eval "<javascript>"     # evaluate in the renderer
 node scripts/cdp.mjs shot out.png            # screenshot
 ```
 
-`window.__mashdavood` exposes `{ state, editor, doExport, renderPreview }`. For screenshots that
+`window.__mashdavood` exposes `{ state, editor, doExport, renderPreview }`. On Linux without a
+display: `xvfb-run -a npx electron . --no-sandbox --remote-debugging-port=9333`. For screenshots that
 need focus (selection highlights), enable `Emulation.setFocusEmulationEnabled` first.
