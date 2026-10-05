@@ -368,6 +368,10 @@ ipcMain.handle('fs:write', async (_e, { path: p, content }) => {
 })
 
 ipcMain.handle('fs:exists', async (_e, p) => { try { await fsp.access(p); return true } catch { return false } })
+// device + inode (file index on Windows): unchanged when a file is renamed or moved on the same disk
+ipcMain.handle('fs:id', async (_e, p) => {
+  try { const s = await fsp.stat(p, { bigint: true }); return `${s.dev}:${s.ino}` } catch { return null }
+})
 
 ipcMain.handle('fs:saveAs', async (_e, { defaultPath, content }) => {
   const res = await dialog.showSaveDialog(mainWindow, {
@@ -506,6 +510,62 @@ ipcMain.handle('export:pdf', async (_e, { title, body, css, dir, typography, def
     win.destroy()
     fsp.unlink(tmp).catch(() => {})
   }
+})
+
+/* --------------------------------------------------------- diagram images */
+
+/** Estedad embedded in the diagram itself, so a saved SVG/PNG shows Persian labels anywhere. */
+function withEmbeddedFont (svg) {
+  const font = fontDataUri()
+  if (!font) return svg
+  const style = `<style>@font-face{font-family:'Estedad';src:url('${font}') format('woff2');font-weight:100 900;}</style>`
+  return svg.replace(/<svg\b[^>]*>/, (open) => open + style)
+}
+
+async function renderPng (svg, width, height) {
+  // 2x for a crisp image, capped so a huge diagram stays a sane size
+  const scale = Math.max(1, Math.min(2, 8000 / Math.max(width, height)))
+  const w = Math.ceil(width * scale)
+  const h = Math.ceil(height * scale)
+  const tmp = path.join(os.tmpdir(), `mashdavood-diagram-${Date.now()}.html`)
+  await fsp.writeFile(tmp, `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;overflow:hidden;background:transparent}
+svg{display:block;width:${width}px;height:${height}px;max-width:none}
+</style></head><body>${withEmbeddedFont(svg)}</body></html>`, 'utf8')
+  const win = new BrowserWindow({
+    show: false,
+    width: w,
+    height: h,
+    useContentSize: true,
+    transparent: true,
+    webPreferences: { offscreen: true, javascript: false, zoomFactor: scale }
+  })
+  try {
+    await win.loadFile(tmp)
+    await new Promise((r) => setTimeout(r, 350))
+    const image = await win.webContents.capturePage({ x: 0, y: 0, width: w, height: h })
+    return image.toPNG()
+  } finally {
+    win.destroy()
+    fsp.unlink(tmp).catch(() => {})
+  }
+}
+
+ipcMain.handle('diagram:image', async (_e, { svg, width, height, format, name, dir, copy, outPath }) => {
+  if (format === 'png' && copy) return renderPng(svg, width, height)
+  let target = outPath
+  if (!target) {
+    const ext = format === 'svg' ? 'svg' : 'png'
+    const res = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: path.join(dir || app.getPath('documents'), `${name || 'diagram'}.${ext}`),
+      filters: [{ name: ext.toUpperCase(), extensions: [ext] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    target = res.filePath
+  }
+  if (format === 'svg') await fsp.writeFile(target, '<?xml version="1.0" encoding="UTF-8"?>\n' + withEmbeddedFont(svg), 'utf8')
+  else await fsp.writeFile(target, await renderPng(svg, width, height))
+  return target
 })
 
 /* ------------------------------------------------------------- app life */

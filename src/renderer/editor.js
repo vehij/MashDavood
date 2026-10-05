@@ -38,6 +38,9 @@ const mdHighlight = HighlightStyle.define([
 const MD_PREFIX = /^(?:[\s>]*(?:[-*+]|\d+[.)])?\s*)*(?:\[[ xX]\]\s*)?(?:#{1,6}\s*)?/
 const rtlLine = Decoration.line({ class: 'cm-line-rtl' })
 const ltrLine = Decoration.line({ class: 'cm-line-ltr' })
+// the app's own layout lines (%% mashdavood {…}, <!-- mashdavood widths: … -->) stay quiet
+const layoutLine = Decoration.line({ class: 'cm-line-ltr cm-layout-line' })
+const LAYOUT_LINE = /^\s*(?:%%\s*mashdavood\b|<!--\s*mashdavood\s)/
 
 const lineDirection = ViewPlugin.fromClass(class {
   constructor (view) { this.decorations = this.build(view) }
@@ -47,7 +50,9 @@ const lineDirection = ViewPlugin.fromClass(class {
     for (const { from, to } of view.visibleRanges) {
       for (let pos = from; pos <= to;) {
         const line = view.state.doc.lineAt(pos)
-        if (line.length) {
+        if (line.length && LAYOUT_LINE.test(line.text)) {
+          builder.add(line.from, line.from, layoutLine)
+        } else if (line.length) {
           const stripped = line.text.replace(MD_PREFIX, '')
           const probe = stripped.trim() ? stripped : line.text
           let dir = null

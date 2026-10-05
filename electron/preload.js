@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   read: (p) => invoke('fs:read', p),
   write: (p, content) => invoke('fs:write', { path: p, content }),
   exists: (p) => invoke('fs:exists', p),
+  fileId: (p) => invoke('fs:id', p),
   saveAs: (defaultPath, content) => invoke('fs:saveAs', { defaultPath, content }),
   newFileIn: (dir) => invoke('fs:newFileIn', dir),
   readTree: (root) => invoke('fs:readTree', root),
@@ -34,6 +35,7 @@ contextBridge.exposeInMainWorld('api', {
 
   exportHtml: (opts) => invoke('export:html', opts),
   exportPdf: (opts) => invoke('export:pdf', opts),
+  diagramImage: (opts) => invoke('diagram:image', opts),
 
   updates: {
     check: () => invoke('update:check'),

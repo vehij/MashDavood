@@ -76,3 +76,6 @@
 .cm-md-meta { color: var(--text-dim); }
 .cm-md-hr { color: var(--text-dim); }
 .cm-fenced-bg { background: color-mix(in srgb, var(--code-bg) 70%, transparent); }
+.cm-editor .cm-layout-line, .cm-editor .cm-layout-line * {
+  color: var(--text-dim) !important; opacity: .55; font-size: .78em; line-height: 1.5;
+}

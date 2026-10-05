@@ -82,8 +82,8 @@ PDF goes through an offscreen `BrowserWindow` + `printToPDF`. Both handlers acce
 **Tables.** The `table_open` rule wraps every table in `<div class="table-wrap" dir>` (it scrolls;
 the table keeps real table layout). After each render `decorateTables` adds a `.col-resizer` to
 every header cell and re-applies saved widths. Widths are a *view* setting stored in
-`settings.json` → `tableWidths[filePath][tableKey]` (untitled tabs keep them on the tab); the
-`.md` is never touched. `tableKey` = header text joined + occurrence index among tables with the
+`settings.json` → `tableWidths[filePath][tableKey]` (untitled tabs keep them on the tab), or in
+the file itself (see *Layout in the file*). `tableKey` = header text joined + occurrence index among tables with the
 same header, so edits elsewhere in the file keep them. They are applied as a percentage
 `<colgroup>` plus `--table-w` (the dragged total) with `width: min(100%, var(--table-w))` and
 *auto* layout: proportions are honoured, but no column goes below its longest word — a narrow
@@ -91,6 +91,43 @@ pane or the PDF page scales the table or scrolls it, it never splits words. Whil
 column's floor is its min-content width (measured once by laying the table out at `width: 1px`);
 a column wider than the room takes space from its neighbours, nearest first. Exports keep the
 colgroup and drop the handles (`exportBody`).
+
+**Mermaid diagrams (`diagrams.js`).** After mermaid puts an SVG in a block, `decorateDiagram`
+adds the controls and indexes the SVG once, at mermaid's own positions: `g.node` (key = id without
+the render id and mermaid's trailing counter, e.g. `flowchart-A`), every `path[data-edge]` with its
+`data-points` and the nodes its two ends sit on (geometric hit test in viewBox space), and
+`g.edgeLabel`s by `data-id`. That needs layout, so a hidden pane waits for `refreshDiagrams()`, and
+exports lay a hidden preview out off-screen (`.export-layout`). The saved state is
+`{ vb, nodes: { key: [dx, dy] } }` in `settings.json → diagrams[file][type-line#n]`:
+- zoom / pan / frame height are the SVG's `viewBox` (width 100%, height from the aspect), so the
+  frame scales to any page width and the PDF shows exactly that frame. Entering the custom view
+  keeps the picture where it is (the viewBox is widened to the block's full width first).
+- a moved node gets `translate(cx+dx, cy+dy)`; each edge touching it is redrawn with d3's
+  `curveBasis` through its points, shifted by a blend of the two ends' offsets, with the end pulled
+  back by the same arrowhead offset mermaid used (measured from the original `d`). Edge labels move
+  by the mean offset. Without a custom view the viewBox grows to the content.
+Table widths and diagram state are keyed by file path; `carryViewSettings` copies them to the new
+path on Save As, and moves an untitled tab's in-memory copy into `settings.json` on its first save.
+`apply()` always starts from the originals, so it is idempotent across re-renders and theme changes.
+PNG/SVG: the renderer serialises the SVG (with a page-colour background); the main process embeds
+Estedad and, for PNG, renders it in an offscreen window at 2x and `capturePage`s it.
+
+**Layout in the file (`embedLayout`, on by default).** Table widths and diagram state travel inside
+the Markdown as lines every other renderer ignores:
+- `<!-- mashdavood widths: 120,80,200 -->` on the line right above a table (an HTML block, which may
+  interrupt a paragraph; `metaPlugin` copies it to the table's `data-widths`);
+- `%% mashdavood {"vb":…,"nodes":{"flowchart-C":[dx,dy,"label"]}}` as the last line inside the mermaid
+  fence (a mermaid comment; stock mermaid parses it — checked for flowchart and sequence).
+They are written through the editor (`writeTableWidths` / `writeDiagramLayout`, located by the
+block's `data-line`), so they are undoable and saved/autosaved like any edit. The layout line is
+stripped before `mermaid.render` and from the render-cache key, so writing it never re-renders the
+diagram; arrange mode is remembered by diagram key across the re-render. With the setting on, the
+file wins over settings.json; off, settings.json wins and the file is not written. A failed write
+(source line not found) falls back to settings.json. The editor dims these lines.
+Without embedding, settings follow a file renamed/moved outside the app on the same disk:
+`fileIds[path] = "dev:ino"` is recorded on open, and a newly opened path with no settings adopts
+those of a vanished path with the same id. Saved nodes carry their label, so a node whose id was
+renamed in the source (same text) keeps its position.
 
 **Copying the document.** `copyPreview` clones the preview, drops the app's controls, swaps KaTeX
 for its TeX source (`data-tex`, emitted by the math renderers) and writes one `ClipboardItem` with

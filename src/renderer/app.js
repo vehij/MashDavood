@@ -1,7 +1,8 @@
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
-import { createRenderer, renderMarkdown, extractOutline, documentStats, detectDirection, toFileUrl } from './markdown.js'
+import { createRenderer, renderMarkdown, extractOutline, documentStats, detectDirection, toFileUrl, TABLE_WIDTHS_RE, stripDiagramLayout } from './markdown.js'
 import { initUpdates, checkForUpdates } from './updates.js'
+import { initDiagrams, decorateDiagram, diagramKey, refreshDiagrams, stripDiagramChrome } from './diagrams.js'
 import { MarkdownEditor } from './editor.js'
 import { WELCOME_DOC } from './welcome.js'
 
@@ -151,7 +152,7 @@ function setViewMode (mode) {
   el.viewmode.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode))
   api.settings.merge({ viewMode: mode })
   if (mode !== 'preview') setTimeout(() => editor?.focus(), 0)
-  requestAnimationFrame(() => { state.lineMap = [] })
+  requestAnimationFrame(() => { state.lineMap = []; if (mode !== 'editor') refreshDiagrams() })
 }
 
 function setSidebar (visible) {
@@ -278,6 +279,7 @@ async function openFile (path, content = null) {
   state.tabs.push(tab)
   api.watch(path)
   activateTab(tab.id)
+  adoptMovedViewSettings(path)
   return tab
 }
 
@@ -313,6 +315,7 @@ async function saveTabAs (tab) {
   const path = await api.saveAs(tab.path || (state.folder ? joinPath(state.folder.root, 'Untitled.md') : null), tab.content)
   if (!path) return false
   if (tab.path && tab.path !== path) api.unwatch(tab.path)
+  carryViewSettings(tab, path)
   tab.path = path
   tab.name = basename(path)
   tab.saved = tab.content
@@ -335,6 +338,22 @@ async function saveAllDirty () {
   return true
 }
 
+/* Table widths and diagram layouts are keyed by file path: a Save As (or the first save
+   of an untitled tab, which kept them on the tab) takes them along to the new path. */
+function carryViewSettings (tab, newPath) {
+  const patch = {}
+  for (const [key, local] of [['tableWidths', 'tableWidths'], ['diagrams', 'diagrams']]) {
+    const all = state.settings[key] || (state.settings[key] = {})
+    const from = tab.path ? all[tab.path] : tab[local]
+    if (from && Object.keys(from).length) {
+      all[newPath] = JSON.parse(JSON.stringify(from))
+      patch[key] = all
+    }
+    if (!tab.path) delete tab[local]
+  }
+  if (Object.keys(patch).length) api.settings.merge(patch)
+}
+
 const autosave = debounce(() => {
   const tab = activeTab()
   if (state.settings.autosave && tab && tab.path && tab.dirty) saveTab(tab)
@@ -347,19 +366,25 @@ const mermaidCache = new Map()
 async function renderMermaid (dark = state.dark) {
   const blocks = el.preview.querySelectorAll('.mermaid-block')
   if (!blocks.length) return
+  const seen = new Map()
   for (const block of blocks) {
     const src = block.dataset.src || block.querySelector('.mermaid-source')?.textContent || ''
     if (!src.trim()) continue
     block.dataset.src = src
+    const viewKey = diagramKey(src, seen)      // zoom / layout saved for this diagram
     if (block.dataset.rendered === String(dark)) continue
     block.dataset.rendered = String(dark)
-    const key = src + '|' + dark
-    if (mermaidCache.has(key)) { block.innerHTML = mermaidCache.get(key); continue }
+    // the layout line is ours, not mermaid's: editing it must not re-render the diagram
+    const code = stripDiagramLayout(src)
+    const key = code + '|' + dark
+    if (mermaidCache.has(key)) { block.innerHTML = mermaidCache.get(key); decorateDiagram(block, viewKey); continue }
     try {
       const id = 'mmd-' + Math.random().toString(36).slice(2, 9)
-      const { svg } = await mermaid.render(id, src)
+      const { svg } = await mermaid.render(id, code)
       mermaidCache.set(key, svg)
+      if (!block.isConnected) continue
       block.innerHTML = svg
+      decorateDiagram(block, viewKey)
       block.classList.remove('error')
     } catch (e) {
       block.classList.add('error')
@@ -466,7 +491,10 @@ function decorateTables (tab) {
     const n = seen.get(head) || 0
     seen.set(head, n + 1)
     table.dataset.key = head + '#' + n
-    const widths = saved[table.dataset.key]
+    // widths written in the file win when that is where they are kept, settings.json otherwise
+    const inFile = table.dataset.widths ? table.dataset.widths.split(',').map(Number).filter((w) => w > 0) : null
+    const inSettings = saved[table.dataset.key]
+    const widths = state.settings.embedLayout ? (inFile || inSettings) : (inSettings || inFile)
     if (Array.isArray(widths) && widths.length === row.cells.length) setColumnWidths(table, widths)
     for (const cell of row.cells) {
       const handle = document.createElement('span')
@@ -541,8 +569,7 @@ function startColumnResize (e, handle) {
     el.preview.classList.remove('resizing-cols')
     state.lineMap = []
     if (widths.every((w, j) => w === base[j])) return
-    tableWidthsFor(tab, true)[table.dataset.key] = widths.map((w) => Math.round(w))
-    persistTableWidths(tab)
+    saveTableWidths(tab, table, widths.map((w) => Math.round(w)))
   }
   document.addEventListener('mousemove', move)
   document.addEventListener('mouseup', up)
@@ -550,13 +577,98 @@ function startColumnResize (e, handle) {
 
 function resetColumnWidths (handle) {
   const table = handle.closest('table')
-  const tab = activeTab()
-  const saved = tableWidthsFor(tab)
-  if (saved) { delete saved[table.dataset.key]; persistTableWidths(tab) }
+  saveTableWidths(activeTab(), table, null)
   table.querySelector(':scope > colgroup')?.remove()
   table.classList.remove('has-colwidths')
   table.style.removeProperty('--table-w')
   state.lineMap = []
+}
+
+/** Store a table's widths (null = automatic) in the file or in settings.json. */
+function saveTableWidths (tab, table, widths) {
+  if (state.settings.embedLayout && writeTableWidths(table, widths)) {
+    const saved = tableWidthsFor(tab)
+    if (saved?.[table.dataset.key]) { delete saved[table.dataset.key]; persistTableWidths(tab) }
+    return
+  }
+  // not kept in the file (setting off, or the source line could not be found)
+  const saved = tableWidthsFor(tab, !!widths)
+  if (widths) saved[table.dataset.key] = widths
+  else if (saved) delete saved[table.dataset.key]
+  persistTableWidths(tab)
+}
+
+/* ------------------------------------------------- layout in the file */
+
+/* With "embedLayout" on, view settings travel inside the Markdown as lines no other
+   renderer shows. They go through the editor, so they are undoable and saved with the
+   file like any other edit. The block's data-line says where its source starts. */
+
+function sourceLine (n) {
+  const doc = editor.view.state.doc
+  return n >= 1 && n <= doc.lines ? doc.line(n) : null
+}
+
+/** <!-- mashdavood widths: … --> on the line right above the table (null removes it). */
+function writeTableWidths (table, widths) {
+  const start = Number(table.closest('.table-wrap')?.dataset.line)
+  const head = sourceLine(start + 1)
+  if (Number.isNaN(start) || !head || !head.text.includes('|')) return false
+  const above = sourceLine(start)
+  const ours = above && TABLE_WIDTHS_RE.test(above.text)
+  const indent = /^\s*/.exec(head.text)[0]
+  const text = widths ? `${indent}<!-- mashdavood widths: ${widths.join(',')} -->` : null
+  if (ours && text) editor.view.dispatch({ changes: { from: above.from, to: above.to, insert: text } })
+  else if (ours) editor.view.dispatch({ changes: { from: above.from, to: head.from, insert: '' } })
+  else if (text) editor.view.dispatch({ changes: { from: head.from, insert: text + '\n' } })
+  return true
+}
+
+/** %% mashdavood {…} as the last line inside the diagram's fence (null removes it). */
+function writeDiagramLayout (block, data) {
+  const start = Number(block.dataset.line)
+  const open = sourceLine(start + 1)
+  const fence = open && /^(\s*)(`{3,}|~{3,})\s*mermaid\b/i.exec(open.text)
+  if (!fence) return false
+  const closeRe = new RegExp('^\\s*' + (fence[2][0] === '`' ? '`' : '~') + '{' + fence[2].length + ',}\\s*$')
+  const doc = editor.view.state.doc
+  let close = null
+  let existing = null
+  for (let n = start + 2; n <= doc.lines; n++) {
+    const line = doc.line(n)
+    if (closeRe.test(line.text)) { close = line; break }
+    if (/^\s*%%\s*mashdavood\b/.test(line.text)) existing = line
+  }
+  if (!close) return false
+  const text = data ? `${fence[1]}%% mashdavood ${JSON.stringify(data)}` : null
+  if (existing && text) editor.view.dispatch({ changes: { from: existing.from, to: existing.to, insert: text } })
+  else if (existing) editor.view.dispatch({ changes: { from: existing.from, to: Math.min(existing.to + 1, doc.length), insert: '' } })
+  else if (text) editor.view.dispatch({ changes: { from: close.from, insert: text + '\n' } })
+  return true
+}
+
+/* A file renamed or moved outside the app keeps its file-system id (same disk), so
+   settings stored under its old path can follow it. */
+async function adoptMovedViewSettings (path) {
+  const id = await api.fileId(path)
+  if (!id) return
+  const ids = state.settings.fileIds || (state.settings.fileIds = {})
+  const patch = {}
+  const keys = ['tableWidths', 'diagrams']
+  if (!keys.some((k) => state.settings[k]?.[path])) {
+    const old = Object.keys(ids).find((p) => p !== path && ids[p] === id && keys.some((k) => state.settings[k]?.[p]))
+    if (old && !(await api.exists(old))) {
+      for (const k of keys) {
+        const all = state.settings[k]
+        if (all?.[old]) { all[path] = all[old]; delete all[old]; patch[k] = all }
+      }
+      delete ids[old]
+    }
+  }
+  if (ids[path] !== id) { ids[path] = id; patch.fileIds = ids }
+  if (!Object.keys(patch).length) return
+  api.settings.merge(patch)
+  if ((patch.tableWidths || patch.diagrams) && activeTab()?.path === path) renderPreview(true)
 }
 
 /* ------------------------------------------------------------ copying */
@@ -566,6 +678,7 @@ function cleanPreviewClone () {
   const clone = el.preview.cloneNode(true)
   clone.querySelectorAll('.copy-btn, .heading-anchor, .col-resizer, .code-lang, .mermaid-source, .fm-raw')
     .forEach((n) => n.remove())
+  stripDiagramChrome(clone)
   // KaTeX markup only makes sense with its stylesheet; carry the TeX source instead
   clone.querySelectorAll('[data-tex]').forEach((m) => {
     const display = m.tagName === 'DIV'
@@ -839,14 +952,18 @@ function collectCss () {
 function exportBody () {
   const clone = el.preview.cloneNode(true)
   clone.querySelectorAll('.col-resizer').forEach((n) => n.remove())
+  stripDiagramChrome(clone)
   return clone.innerHTML
 }
 
 async function doExport (kind, outPath = null) {
   const tab = activeTab()
   if (!tab) return
+  // diagram layouts need real geometry: give a hidden preview a layout off-screen
+  el.app.classList.add('export-layout')
   renderPreview(true)
   await new Promise((r) => setTimeout(r, 300))     // let mermaid finish
+  refreshDiagrams()
   // exports are always on a light page, so diagrams get the light palette too
   if (state.dark) {
     mermaid.initialize(mermaidConfig(false))
@@ -872,6 +989,7 @@ async function doExport (kind, outPath = null) {
   } catch (e) {
     toast('Export failed: ' + e.message, 'error')
   } finally {
+    el.app.classList.remove('export-layout')
     if (state.dark) {
       mermaid.initialize(mermaidConfig(true))
       await renderMermaid(true)
@@ -917,6 +1035,8 @@ function settingsModal () {
     <div class="row"><label>Spellcheck in editor</label><input type="checkbox" id="set-spell"></div>
     <div class="row"><label>Justify paragraphs<span class="hint">تراز دوطرفه در پیش‌نمایش و خروجی</span></label>
       <input type="checkbox" id="set-justify"></div>
+    <div class="row"><label>Keep table widths &amp; diagram layouts in the file<span class="hint">به‌صورت توضیح نامرئی داخل خود فایل؛ با فایل به هر جا و هر کس می‌رسد</span></label>
+      <input type="checkbox" id="set-embed"></div>
     <div class="row"><label>Check for updates automatically<span class="hint">اطلاع از نسخه‌ی جدید هنگام باز شدن برنامه</span></label>
       <input type="checkbox" id="set-updates"></div>
     <div class="row"><label>Version<span class="hint">نسخه‌ی نصب‌شده</span></label>
@@ -959,6 +1079,9 @@ function settingsModal () {
     const justify = root.querySelector('#set-justify')
     justify.checked = !!s.justify
     justify.addEventListener('change', () => setReadingOption('justify', justify.checked))
+    const embed = root.querySelector('#set-embed')
+    embed.checked = s.embedLayout !== false
+    embed.addEventListener('change', () => { s.embedLayout = embed.checked; api.settings.merge({ embedLayout: embed.checked }); renderPreview(true) })
     const updates = root.querySelector('#set-updates')
     updates.checked = s.checkUpdates !== false
     updates.addEventListener('change', () => { s.checkUpdates = updates.checked; api.settings.merge({ checkUpdates: updates.checked }) })
@@ -1047,7 +1170,8 @@ function shortcutsModal () {
     ['Bullet / numbered / task list', '⇧⌘8 / ⇧⌘7 / ⇧⌘9'], ['Quote', '⇧⌘.'],
     ['Table / Mermaid diagram', '⌥⌘T / ⌥⌘M'], ['Export PDF / HTML', '⌘P / ⇧⌘E'],
     ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'], ['Reveal in Finder', '⌥⌘R'],
-    ['Copy document as shown / as Markdown', '⌥⇧⌘C / ⌥⇧⌘M'], ['Reading settings panel', '⌥⌘,']
+    ['Copy document as shown / as Markdown', '⌥⇧⌘C / ⌥⇧⌘M'], ['Reading settings panel', '⌥⌘,'],
+    ['Zoom a Mermaid diagram', '⌘ + scroll / pinch']
   ]
   openModal(`<h2>Keyboard Shortcuts</h2><table>${rows.map(([a, b]) => `<tr><td>${a}</td><td>${keys(b)}</td></tr>`).join('')}</table><div class="modal-foot"><button data-close>Close</button></div>`)
 }
@@ -1196,6 +1320,7 @@ function wireUi () {
   el.preview.addEventListener('dblclick', (e) => {
     const handle = e.target.closest('.col-resizer')
     if (handle) { e.preventDefault(); resetColumnWidths(handle); return }
+    if (e.target.closest('.mmd-tools, .mmd-resize, .mmd-menu')) return
     const node = e.target.closest('[data-line]')
     if (!node || state.settings.viewMode === 'preview') return
     editor.cursorToLine(Number(node.dataset.line))
@@ -1357,6 +1482,7 @@ async function boot () {
   wireUi()
   wireIpc()
   initUpdates({ api, state, openModal, toast, renderNotes: (text) => renderMarkdown(md, text), saveAllDirty })
+  initDiagrams({ preview: el.preview, api, state, activeTab, toast, writeLayout: writeDiagramLayout, onLayout: () => { state.lineMap = [] } })
   renderTree()
   renderTabs()
   renderRecent(settings)
@@ -1388,7 +1514,7 @@ async function boot () {
 const updateStatusSoon = debounce(() => updateStatus(), 220)
 
 // small handle for scripted checks and debugging
-window.__mashdavood = window.__mdreader = { state, doExport, renderPreview, get editor () { return editor } }
+window.__mashdavood = window.__mdreader = { state, doExport, renderPreview, mermaid, get editor () { return editor } }
 
 boot().catch((e) => {
   document.body.innerHTML = `<pre style="padding:24px;font-family:monospace;color:#c33">Startup error:\n${e?.stack || e}</pre>`

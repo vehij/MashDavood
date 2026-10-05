@@ -184,6 +184,20 @@ function calloutPlugin (md) {
 const DIR_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'li', 'td', 'th', 'dt', 'dd', 'table', 'summary'])
 const LINE_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'ul', 'ol', 'table', 'hr', 'dl', 'pre'])
 
+/* View settings written into the Markdown itself, invisible to every other renderer:
+   a mermaid comment line inside the diagram, an HTML comment above a table. */
+export const TABLE_WIDTHS_RE = /^\s*<!--\s*mashdavood\s+widths:\s*([\d.,\s]+?)\s*-->\s*$/
+export const DIAGRAM_LAYOUT_RE = /^[ \t]*%%[ \t]*mashdavood[ \t]+(\{.*\})[ \t]*$/m
+
+/** Diagram source without the layout line, for mermaid and its render cache. */
+export const stripDiagramLayout = (src) => src.replace(/^[ \t]*%%[ \t]*mashdavood\b.*(?:\r?\n|$)/gm, '')
+
+export function readDiagramLayout (src) {
+  const m = DIAGRAM_LAYOUT_RE.exec(src || '')
+  if (!m) return null
+  try { const v = JSON.parse(m[1]); return v && typeof v === 'object' ? v : null } catch { return null }
+}
+
 /** Direction of a mixed block (a table, the front matter) by letter count. */
 function dominantDirection (text) {
   const rtl = (text.match(RTL_G) || []).length
@@ -207,6 +221,10 @@ function metaPlugin (md) {
       const token = tokens[i]
       if (token.type === 'table_open') {
         token.attrSet('dir', tableDirection(tokens, i))
+        // column widths saved in the file: <!-- mashdavood widths: 120,80,200 --> right above
+        const prev = tokens[i - 1]
+        const saved = prev && prev.type === 'html_block' && TABLE_WIDTHS_RE.exec(prev.content)
+        if (saved) token.attrSet('data-widths', saved[1].replace(/\s+/g, ''))
       } else if (token.type.endsWith('_open') && (DIR_TAGS.has(token.tag) || token.tag === 'ul' || token.tag === 'ol')) {
         // resolve the direction from the first strong character of the block's own text,
         // which is what dir="auto" would do — but explicit, so CSS can react to it
