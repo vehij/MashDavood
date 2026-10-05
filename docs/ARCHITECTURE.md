@@ -106,6 +106,8 @@ exports lay a hidden preview out off-screen (`.export-layout`). The saved state 
   `curveBasis` through its points, shifted by a blend of the two ends' offsets, with the end pulled
   back by the same arrowhead offset mermaid used (measured from the original `d`). Edge labels move
   by the mean offset. Without a custom view the viewBox grows to the content.
+Table widths and diagram state are keyed by file path; `carryViewSettings` copies them to the new
+path on Save As, and moves an untitled tab's in-memory copy into `settings.json` on its first save.
 `apply()` always starts from the originals, so it is idempotent across re-renders and theme changes.
 PNG/SVG: the renderer serialises the SVG (with a page-colour background); the main process embeds
 Estedad and, for PNG, renders it in an offscreen window at 2x and `capturePage`s it.

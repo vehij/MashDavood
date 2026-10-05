@@ -314,6 +314,7 @@ async function saveTabAs (tab) {
   const path = await api.saveAs(tab.path || (state.folder ? joinPath(state.folder.root, 'Untitled.md') : null), tab.content)
   if (!path) return false
   if (tab.path && tab.path !== path) api.unwatch(tab.path)
+  carryViewSettings(tab, path)
   tab.path = path
   tab.name = basename(path)
   tab.saved = tab.content
@@ -334,6 +335,22 @@ async function saveAllDirty () {
     if (tab.dirty && !(await saveTab(tab))) return false
   }
   return true
+}
+
+/* Table widths and diagram layouts are keyed by file path: a Save As (or the first save
+   of an untitled tab, which kept them on the tab) takes them along to the new path. */
+function carryViewSettings (tab, newPath) {
+  const patch = {}
+  for (const [key, local] of [['tableWidths', 'tableWidths'], ['diagrams', 'diagrams']]) {
+    const all = state.settings[key] || (state.settings[key] = {})
+    const from = tab.path ? all[tab.path] : tab[local]
+    if (from && Object.keys(from).length) {
+      all[newPath] = JSON.parse(JSON.stringify(from))
+      patch[key] = all
+    }
+    if (!tab.path) delete tab[local]
+  }
+  if (Object.keys(patch).length) api.settings.merge(patch)
 }
 
 const autosave = debounce(() => {
