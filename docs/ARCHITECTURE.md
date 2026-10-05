@@ -150,6 +150,21 @@ re-applied on every tab switch (`applyEditorMode`). The toolbar is Read (`previe
 `split` and `editor` remain in the View menu, and `split`/`editor` users moved to `live` once
 (`liveIntroduced`).
 
+**Table editing in Live Preview (`table-edit.js`).** A table widget is edited cell by cell instead of
+revealing its source: a click swaps the cell's rendering for a `contenteditable="plaintext-only"`
+field holding that cell's Markdown (`\|` shown as `|`). Each input writes only that cell's span in
+the document — located on every write from the widget's `posAtDOM`, the lezer `Table` node and
+`splitRow` (pipe-split honouring `\|`; short rows get the missing cells appended) — so undo, dirty
+state and the rest of the table text are untouched. Before dispatching, the expected new table text
+is stored in `host._lp.expect`; `TableWidget.updateDOM` keeps the DOM (and the caret) when the new
+widget's text matches, otherwise the widget is redrawn and editing resumes at the same cell
+(`hostAt` + `_tableEdit.edit`). Rendered row r maps to source line r (header) or r + 1; editing is
+refused (source revealed) when the rendered and source row counts disagree. Tab/Enter/arrows move
+between cells and add a row at the end; Esc leaves the table; ⌘Z/⇧⌘Z go to the editor's history.
+Row insert/delete touch single lines; column insert/delete and alignment reformat the table through
+`parse`/`format`, keeping the widths comment in step. A widths comment directly above a table is
+never hidden on its own (it belongs to the table widget).
+
 **Copying the document.** `copyPreview` clones the preview, drops the app's controls, swaps KaTeX
 for its TeX source (`data-tex`, emitted by the math renderers) and writes one `ClipboardItem` with
 `text/html` (minimal inline styles so Word/Docs keep table borders, wrapped in the document's `dir`)

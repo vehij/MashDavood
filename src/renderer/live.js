@@ -14,6 +14,7 @@
 import { EditorView, Decoration, WidgetType } from '@codemirror/view'
 import { StateField, StateEffect } from '@codemirror/state'
 import { syntaxTree, ensureSyntaxTree } from '@codemirror/language'
+import { attachTableEditing } from './table-edit.js'
 
 /** Re-render every widget (theme change, settings that affect rendering). */
 export const refreshLive = StateEffect.define()
@@ -111,20 +112,26 @@ class TableWidget extends BlockWidget {
 
   eq (o) { return o.source === this.source && o.epoch === this.epoch }
 
-  /* a new widths comment comes from dragging a column here: the DOM already shows it */
+  /* keep the DOM when it already shows the new text: a widths comment written by
+     dragging a column, or a cell typed into right here */
   updateDOM (dom) {
-    if (dom._lp?.table !== this.table || dom._lp?.epoch !== this.epoch) return false
-    dom._lp.source = this.source
+    if (!dom._lp || dom._lp.epoch !== this.epoch) return false
+    if (dom._lp.table !== this.table && dom._lp.expect !== this.table) return false
+    Object.assign(dom._lp, { table: this.table, source: this.source, expect: null })
     return true
   }
 
   toDOM (view) {
     const host = document.createElement('div')
     host.className = 'lp-block lp-table markdown-body'
-    host._lp = { table: this.table, source: this.source, epoch: this.epoch }
+    host._lp = { table: this.table, source: this.source, epoch: this.epoch, expect: null }
     host.innerHTML = this.hooks.renderTable(this.source)
     this.hooks.decorateTable(host)
-    revealOnClick(host, view)
+    const rtl = host.querySelector('table')?.getAttribute('dir') === 'rtl'
+    const button = editButton(view, host, 'Edit the table as Markdown (right-click a cell for rows and columns)')
+    if (!rtl) button.classList.add('lp-edit-right')
+    host.appendChild(button)
+    attachTableEditing(host, view, this.hooks, () => revealBlock(view, host))
     return host
   }
 }
@@ -244,8 +251,15 @@ function build (state, hooks, epoch) {
 
   /* code ranges, so math is not looked for inside code */
   const code = []
-  tree.iterate({ enter (n) { if (n.name === 'FencedCode' || n.name === 'CodeBlock' || n.name === 'InlineCode') code.push([n.from, n.to]) } })
+  const tables = new Set()             // first line of every table
+  tree.iterate({
+    enter (n) {
+      if (n.name === 'FencedCode' || n.name === 'CodeBlock' || n.name === 'InlineCode') code.push([n.from, n.to])
+      else if (n.name === 'Table') tables.add(doc.lineAt(n.from).from)
+    }
+  })
   const inCode = (pos) => code.some(([a, b]) => pos >= a && pos < b)
+  const tableAt = (lineStart) => tables.has(lineStart)
 
   /* $$ … $$ blocks */
   for (let n = 1; n <= doc.lines; n++) {
@@ -427,6 +441,9 @@ function build (state, hooks, epoch) {
 
       if (name === 'CommentBlock' || name === 'HTMLBlock') {
         const text = doc.sliceString(node.from, node.to)
+        // a widths comment right above a table is part of the table's widget
+        const next = doc.lineAt(node.to).number < doc.lines ? doc.line(doc.lineAt(node.to).number + 1) : null
+        if (TABLE_WIDTHS.test(text) && next && tableAt(next.from)) return false
         if (/^\s*<!--\s*mashdavood\b/.test(text) && !lineTouched(node.from, node.to)) {
           add(doc.lineAt(node.from).from, doc.lineAt(node.to).to, Decoration.replace({ block: true }))
         }

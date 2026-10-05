@@ -156,7 +156,19 @@
   position: relative; cursor: default;
 }
 .cm-live .lp-block .table-wrap, .cm-live .lp-block .mermaid-block, .cm-live .lp-block .fm-card { margin: 0; }
-.cm-live .lp-table { cursor: text; }
+.cm-live .lp-table { cursor: default; }
+/* table cells are edited in place: a click opens the cell's Markdown in a field */
+.cm-live .lp-table :is(td, th) { cursor: text; }
+.cm-live .lp-table :is(td, th).lp-editing { box-shadow: inset 0 0 0 2px var(--accent); background: var(--bg); }
+.cm-live .lp-table .lp-cell-field {
+  display: block; min-height: 1.75em; outline: none; white-space: pre-wrap; caret-color: var(--accent);
+  /* each cell takes its direction from its own first letter, as the rendered cell does */
+  unicode-bidi: plaintext;
+}
+.cm-live .lp-table-menu { min-width: 190px; }
+.cm-live .lp-table-menu button:disabled { opacity: .4; cursor: default; background: transparent; color: var(--text); }
+.cm-live .lp-table-menu .lp-menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+.cm-live .lp-edit.lp-edit-right { left: auto; right: 6px; }
 .cm-live .lp-preview { opacity: .92; margin-top: .4em; }
 .cm-live .lp-preview .mermaid-block { border-style: dashed; }
 .cm-live .lp-edit {
