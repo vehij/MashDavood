@@ -79,3 +79,92 @@
 .cm-editor .cm-layout-line, .cm-editor .cm-layout-line * {
   color: var(--text-dim) !important; opacity: .55; font-size: .78em; line-height: 1.5;
 }
+
+/* ================================================= Live Preview (Edit mode)
+   The editor takes the preview's typography; markup is hidden off the cursor by
+   live.js, so the page reads like the rendered document while staying editable. */
+.app[data-view='live'] .cm-scroller,
+.app[data-view='live'] .cm-editor .cm-content,
+.app[data-view='live'] .cm-editor .cm-line {
+  font-family: var(--font-ui);
+  font-size: var(--preview-font-size);
+  line-height: var(--preview-line-height);
+}
+.app[data-view='live'] .cm-editor .cm-activeLine { background: transparent; }
+/* the source highlighter's own sizes and colours give way to the rendered look */
+.cm-live .cm-md-heading, .cm-live .cm-md-h1, .cm-live .cm-md-h2, .cm-live .cm-md-h3 { font-size: inherit; color: inherit; }
+.cm-live .cm-md-quote { font-style: normal; color: inherit; }
+.cm-live .cm-md-code { color: inherit; }
+.cm-live .cm-md-link, .cm-live .cm-md-url { color: var(--accent); text-decoration: none; }
+.cm-live .cm-md-mark { opacity: .45; }
+
+/* headings outrank the editor-wide preview font size above */
+.app[data-view='live'] .cm-editor .cm-line.lp-h { font-weight: 700; line-height: 1.45; }
+.app[data-view='live'] .cm-editor .cm-line.lp-h1 { font-size: calc(var(--preview-font-size) * 1.85); font-weight: 800; }
+.app[data-view='live'] .cm-editor .cm-line.lp-h2 { font-size: calc(var(--preview-font-size) * 1.42); }
+.app[data-view='live'] .cm-editor .cm-line.lp-h3 { font-size: calc(var(--preview-font-size) * 1.2); }
+.app[data-view='live'] .cm-editor .cm-line.lp-h4 { font-size: calc(var(--preview-font-size) * 1.05); }
+.app[data-view='live'] .cm-editor .cm-line.lp-h5 { font-size: calc(var(--preview-font-size) * .95); }
+.app[data-view='live'] .cm-editor .cm-line.lp-h6 { font-size: calc(var(--preview-font-size) * .88); }
+.cm-live .cm-md-list { color: inherit; }
+.cm-live .lp-h { font-weight: 700; line-height: 1.45; }
+.cm-live .lp-h1 { font-size: 1.85em; font-weight: 800; padding-top: .6em !important; }
+.cm-live .lp-h2 { font-size: 1.42em; padding-top: .55em !important; border-bottom: 1px solid var(--border); }
+.cm-live .lp-h3 { font-size: 1.2em; padding-top: .4em !important; }
+.cm-live .lp-h4 { font-size: 1.05em; }
+.cm-live .lp-h5 { font-size: .95em; color: var(--text-soft); }
+.cm-live .lp-h6 { font-size: .88em; color: var(--text-dim); }
+.cm-live .lp-strong, .cm-live .lp-strong * { font-weight: 800; }
+.cm-live .lp-em, .cm-live .lp-em * { font-style: italic; }
+.cm-live .lp-strike { text-decoration: line-through; color: var(--text-dim); }
+.cm-live .lp-code {
+  font-family: var(--font-mono); font-size: .88em; background: var(--code-bg);
+  border: 1px solid var(--code-border); border-radius: 5px; padding: .08em .3em; direction: ltr; unicode-bidi: isolate;
+}
+.cm-live .lp-link { color: var(--accent); cursor: text; }
+.cm-live .lp-link:hover { text-decoration: underline; }
+.cm-live .lp-bullet { color: var(--text-dim); display: inline-block; width: 1.1em; text-align: center; }
+.cm-live .lp-listmark { color: var(--text-dim); }
+.cm-live .lp-task { margin: 0 0 0 .45em; vertical-align: middle; accent-color: var(--accent); cursor: pointer; }
+.cm-live .cm-line-ltr .lp-task { margin: 0 .45em 0 0; }
+.cm-live .lp-task-done { color: var(--text-dim); text-decoration: line-through; }
+.cm-live .lp-quote { border-inline-start: 3px solid var(--border-strong); padding-inline-start: 1em !important; color: var(--text-soft); }
+.cm-live .lp-callout { background: var(--bg-sunken); }
+.cm-live .lp-callout-note { border-inline-start-color: var(--accent); }
+.cm-live .lp-callout-tip { border-inline-start-color: #2ea27a; }
+.cm-live .lp-callout-warning { border-inline-start-color: var(--warn); }
+.cm-live .lp-callout-danger { border-inline-start-color: var(--danger); }
+.cm-live .lp-callout-label { font-weight: 700; color: var(--accent); }
+.cm-live .lp-callout-warning .lp-callout-label { color: var(--warn); }
+.cm-live .lp-callout-danger .lp-callout-label { color: var(--danger); }
+.cm-live .lp-callout-tip .lp-callout-label { color: #2ea27a; }
+.cm-live .lp-hr { display: inline-block; width: 100%; height: 0; border-top: 1px solid var(--border); vertical-align: middle; }
+.app[data-view='live'] .cm-editor .cm-line.lp-code-line, .app[data-view='live'] .cm-editor .cm-line.lp-table-line {
+  font-family: var(--font-mono) !important; font-size: .86em !important; line-height: 1.65 !important;
+  background: var(--code-bg); padding: 0 12px !important;
+}
+/* code reads left to right; a table's source keeps its own direction so a Persian
+   table's columns stay in the order they are shown in */
+.app[data-view='live'] .cm-editor .cm-line.lp-code-line { direction: ltr !important; text-align: left !important; }
+.app[data-view='live'] .cm-editor .cm-line.lp-fence { color: var(--text-dim); font-size: .75em !important; }
+.cm-live .lp-image { max-width: 100%; border-radius: 8px; vertical-align: middle; }
+.cm-live .lp-math { direction: ltr; unicode-bidi: isolate; }
+
+/* block widgets reuse the preview's styles (they are .markdown-body) without its page box */
+.cm-live .lp-block, .cm-live .lp-math-block {
+  max-width: none; margin: .6em 0; padding: 0; font-size: var(--preview-font-size); line-height: var(--preview-line-height);
+  position: relative; cursor: default;
+}
+.cm-live .lp-block .table-wrap, .cm-live .lp-block .mermaid-block, .cm-live .lp-block .fm-card { margin: 0; }
+.cm-live .lp-table { cursor: text; }
+.cm-live .lp-preview { opacity: .92; margin-top: .4em; }
+.cm-live .lp-preview .mermaid-block { border-style: dashed; }
+.cm-live .lp-edit {
+  position: absolute; top: 6px; left: 6px; z-index: 3; height: 22px; padding: 0 6px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-dim); cursor: pointer;
+  display: inline-flex; align-items: center; opacity: 0; transition: opacity .12s;
+}
+.cm-live .lp-block:hover .lp-edit { opacity: 1; }
+.cm-live .lp-edit:hover { color: var(--accent); border-color: var(--accent); }
+.cm-editor .cm-line.lp-dir-rtl { direction: rtl; text-align: right; }
+.cm-editor .cm-line.lp-dir-ltr { direction: ltr; text-align: left; }

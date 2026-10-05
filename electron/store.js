@@ -6,7 +6,7 @@ const FILE = path.join(app.getPath('userData'), 'settings.json')
 
 const DEFAULTS = {
   theme: 'system',           // system | light | dark
-  viewMode: 'split',         // editor | split | preview
+  viewMode: 'live',          // live (edit in the rendered view) | preview (read) | split | editor (source)
   direction: 'auto',         // auto | rtl | ltr
   fontSize: 16,
   editorFontSize: 14.5,

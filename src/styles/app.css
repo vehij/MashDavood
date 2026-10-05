@@ -132,6 +132,7 @@ body.platform-win .titlebar { -webkit-app-region: no-drag; }
 }
 .segmented button:hover { color: var(--text); }
 .segmented button.active { background: var(--bg-elev); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.segmented.labeled button { width: auto; padding: 0 9px 0 7px; gap: 5px; font-size: 12px; font-weight: 600; }
 :root[data-theme='dark'] .segmented button.active { background: #2c2f37; }
 
 /* ---------------------------------------------------------- tabstrip */
@@ -231,8 +232,10 @@ body.platform-win .titlebar { -webkit-app-region: no-drag; }
 .pane-editor { flex: 0 0 50%; background: var(--bg); }
 .pane-preview { flex: 1 1 auto; background: var(--bg); }
 
-.app[data-view='editor'] .pane-preview, .app[data-view='editor'] .pane-split { display: none; }
-.app[data-view='editor'] .pane-editor { flex: 1 1 auto; }
+.app[data-view='editor'] .pane-preview, .app[data-view='editor'] .pane-split,
+.app[data-view='live'] .pane-preview, .app[data-view='live'] .pane-split { display: none; }
+/* !important: the split ratio is an inline flex on the editor pane */
+.app[data-view='editor'] .pane-editor, .app[data-view='live'] .pane-editor { flex: 1 1 auto !important; }
 .app[data-view='preview'] .pane-editor, .app[data-view='preview'] .pane-split { display: none; }
 
 .editor-host { flex: 1 1 auto; min-height: 0; overflow: hidden; }
@@ -332,7 +335,7 @@ kbd {
 .update-pill.hidden { display: none; }
 
 /* -------------------------------------------- floating preview tools */
-.pane-preview { position: relative; }
+.panes { position: relative; }
 .preview-tools {
   position: absolute; top: 10px; right: 20px; z-index: 6;
   display: flex; align-items: center; gap: 2px; padding: 2px;
@@ -417,6 +420,6 @@ kbd {
 .mmd-ov-stage svg { display: block; max-width: none; }
 
 /* exports need diagram geometry even when the preview pane is hidden */
-.app.export-layout[data-view='editor'] .pane-preview {
+.app.export-layout[data-view='editor'] .pane-preview, .app.export-layout[data-view='live'] .pane-preview {
   display: flex !important; position: absolute; left: -20000px; top: 0; width: 820px; height: 100%; visibility: hidden;
 }

@@ -163,9 +163,12 @@ function buildMenu () {
     {
       label: 'View',
       submenu: [
-        { label: 'Editor Only', accelerator: 'CmdOrCtrl+1', click: menuAction('view:editor') },
-        { label: 'Split', accelerator: 'CmdOrCtrl+2', click: menuAction('view:split') },
-        { label: 'Preview Only', accelerator: 'CmdOrCtrl+3', click: menuAction('view:preview') },
+        { label: 'Edit (in the rendered view)', accelerator: 'CmdOrCtrl+1', click: menuAction('view:live') },
+        { label: 'Read', accelerator: 'CmdOrCtrl+2', click: menuAction('view:preview') },
+        { label: 'Switch Read / Edit', accelerator: 'CmdOrCtrl+E', click: menuAction('view:toggle') },
+        { type: 'separator' },
+        { label: 'Markdown Source + Preview', accelerator: 'CmdOrCtrl+3', click: menuAction('view:split') },
+        { label: 'Markdown Source Only', accelerator: 'CmdOrCtrl+4', click: menuAction('view:editor') },
         { type: 'separator' },
         { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+\\', click: menuAction('toggleSidebar') },
         { label: 'Toggle Theme', accelerator: 'CmdOrCtrl+Shift+L', click: menuAction('toggleTheme') },

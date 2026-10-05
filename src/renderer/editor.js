@@ -7,6 +7,7 @@ import { languages } from '@codemirror/language-data'
 import { syntaxHighlighting, HighlightStyle, bracketMatching, indentUnit } from '@codemirror/language'
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, search } from '@codemirror/search'
 import { tags as t } from '@lezer/highlight'
+import { livePreview, refreshLive } from './live.js'
 
 const mdHighlight = HighlightStyle.define([
   { tag: t.heading1, class: 'cm-md-heading cm-md-h1' },
@@ -79,6 +80,8 @@ export class MarkdownEditor {
     this.spellcheckComp = new Compartment()
     this.readonlyComp = new Compartment()
     this.historyComp = new Compartment()
+    this.liveComp = new Compartment()
+    this.liveExt = null
 
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged && !this.suppress) this.onChange?.(update.state.doc.toString())
@@ -119,6 +122,7 @@ export class MarkdownEditor {
       ]),
       this.spellcheckComp.of(EditorView.contentAttributes.of({ spellcheck: String(spellcheck), autocorrect: 'off', autocapitalize: 'off' })),
       this.readonlyComp.of([]),
+      this.liveComp.of([]),
       updateListener,
       domHandlers
     ]
@@ -158,6 +162,30 @@ export class MarkdownEditor {
         EditorView.contentAttributes.of({ spellcheck: String(!!on), autocorrect: 'off', autocapitalize: 'off' })
       )
     })
+  }
+
+  /** Live Preview on/off; `hooks` render the widgets (see live.js). */
+  setLive (on, hooks) {
+    if (on && !this.liveExt) this.liveExt = livePreview(hooks)
+    this.live = !!on
+    this.view.dispatch({ effects: this.liveComp.reconfigure(on ? this.liveExt : []) })
+  }
+
+  /** A freshly opened document: put the cursor after the front matter, so Live
+      Preview shows it as a card instead of opening its source. */
+  skipFrontMatter () {
+    const m = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(this.view.state.doc.sliceString(0, 20000))
+    if (m && this.view.state.selection.main.head === 0) this.view.dispatch({ selection: { anchor: Math.min(m[0].length, this.view.state.doc.length) } })
+  }
+
+  /** Render every live widget again (theme change). */
+  refreshLive () {
+    if (this.live) this.view.dispatch({ effects: refreshLive.of(null) })
+  }
+
+  /** 0-based source line of a DOM node inside the editor (a live widget). */
+  lineAtDom (dom) {
+    try { return this.view.state.doc.lineAt(this.view.posAtDOM(dom)).number - 1 } catch { return NaN }
   }
 
   setReadOnly (on) {

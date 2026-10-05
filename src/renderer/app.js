@@ -1,8 +1,8 @@
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
-import { createRenderer, renderMarkdown, extractOutline, documentStats, detectDirection, toFileUrl, TABLE_WIDTHS_RE, stripDiagramLayout } from './markdown.js'
+import { createRenderer, renderMarkdown, extractOutline, documentStats, detectDirection, toFileUrl, TABLE_WIDTHS_RE, stripDiagramLayout, renderMath, renderFrontMatterHtml } from './markdown.js'
 import { initUpdates, checkForUpdates } from './updates.js'
-import { initDiagrams, decorateDiagram, diagramKey, refreshDiagrams, stripDiagramChrome } from './diagrams.js'
+import { initDiagrams, decorateDiagram, diagramKey, refreshDiagrams, stripDiagramChrome, attachDiagramEvents } from './diagrams.js'
 import { MarkdownEditor } from './editor.js'
 import { WELCOME_DOC } from './welcome.js'
 
@@ -129,6 +129,7 @@ function setDarkClass (dark) {
   document.documentElement.dataset.theme = dark ? 'dark' : 'light'
   mermaid.initialize(mermaidConfig(dark))
   scheduleRender(true)
+  editor?.refreshLive()
 }
 
 /* --------------------------------------------------------- typography */
@@ -151,6 +152,7 @@ function setViewMode (mode) {
   el.app.dataset.view = mode
   el.viewmode.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode))
   api.settings.merge({ viewMode: mode })
+  applyEditorMode()
   if (mode !== 'preview') setTimeout(() => editor?.focus(), 0)
   requestAnimationFrame(() => { state.lineMap = []; if (mode !== 'editor') refreshDiagrams() })
 }
@@ -220,7 +222,10 @@ function activateTab (id, { focus = true } = {}) {
   const tab = state.tabs.find((t) => t.id === id)
   if (!tab) return
   state.activeId = id
+  const fresh = !tab.editorState
   editor.setState(tab.editorState || editor.createState(tab.content))
+  if (fresh) editor.skipFrontMatter()
+  applyEditorMode()                             // every tab has its own state: re-apply the mode
   renderTabs()
   renderPreview(true)
   requestAnimationFrame(() => {
@@ -373,28 +378,74 @@ async function renderMermaid (dark = state.dark) {
     block.dataset.src = src
     const viewKey = diagramKey(src, seen)      // zoom / layout saved for this diagram
     if (block.dataset.rendered === String(dark)) continue
-    block.dataset.rendered = String(dark)
-    // the layout line is ours, not mermaid's: editing it must not re-render the diagram
-    const code = stripDiagramLayout(src)
-    const key = code + '|' + dark
-    if (mermaidCache.has(key)) { block.innerHTML = mermaidCache.get(key); decorateDiagram(block, viewKey); continue }
-    try {
-      const id = 'mmd-' + Math.random().toString(36).slice(2, 9)
-      const { svg } = await mermaid.render(id, code)
-      mermaidCache.set(key, svg)
-      if (!block.isConnected) continue
-      block.innerHTML = svg
-      decorateDiagram(block, viewKey)
-      block.classList.remove('error')
-    } catch (e) {
-      block.classList.add('error')
-      const pre = document.createElement('pre')
-      pre.textContent = 'Mermaid: ' + (e?.message || e)
-      block.innerHTML = ''
-      block.appendChild(pre)
-    }
+    await renderMermaidBlock(block, viewKey, dark)
   }
   state.lineMap = []
+}
+
+/** Render one diagram block (preview or a Live Preview widget) and give it its controls. */
+async function renderMermaidBlock (block, viewKey, dark = state.dark, { decorate = true } = {}) {
+  const src = block.dataset.src || ''
+  block.dataset.rendered = String(dark)
+  // the layout line is ours, not mermaid's: editing it must not re-render the diagram
+  const code = stripDiagramLayout(src)
+  const key = code + '|' + dark
+  const finish = (svg) => {
+    block.innerHTML = svg
+    block.classList.remove('error')
+    if (decorate) decorateDiagram(block, viewKey)
+  }
+  if (mermaidCache.has(key)) { finish(mermaidCache.get(key)); return }
+  try {
+    const id = 'mmd-' + Math.random().toString(36).slice(2, 9)
+    const { svg } = await mermaid.render(id, code)
+    mermaidCache.set(key, svg)
+    if (block.isConnected) finish(svg)
+  } catch (e) {
+    block.classList.add('error')
+    const pre = document.createElement('pre')
+    pre.textContent = 'Mermaid: ' + (e?.message || e)
+    block.innerHTML = ''
+    block.appendChild(pre)
+  }
+}
+
+/* ------------------------------------------------------- live preview */
+
+/* What the Live Preview editor (live.js) shows in place of tables, diagrams, math,
+   images and front matter: the same renderers the preview uses. */
+const liveHooks = {
+  renderMermaid: (block, key, { preview }) => {
+    // the read-only rendering under open source shows the picture, not the controls
+    requestAnimationFrame(() => renderMermaidBlock(block, key, state.dark, { decorate: !preview }))
+  },
+  renderTable: (source) => renderMarkdown(md, source),
+  decorateTable: (root) => decorateTables(activeTab(), root),
+  renderMath: (tex, display) => renderMath(tex, display),
+  renderFrontMatter: (text) => renderFrontMatterHtml(text),
+  resolveImage: (src) => {
+    const tab = activeTab()
+    return tab?.path && !/^(https?:|data:|file:|\/|[a-zA-Z]:[\\/])/.test(src) ? toFileUrl(dirname(tab.path), src) : src
+  },
+  openLink: (href) => followLink(href)
+}
+
+/** Open a link from the preview or the editor: web → browser, .md → tab, other files → their app. */
+function followLink (href) {
+  if (!href) return
+  if (/^(https?:|mailto:)/i.test(href)) { api.openExternal(href); return }
+  if (href.startsWith('#')) return
+  const tab = activeTab()
+  if (!tab?.path) return
+  let resolved = decodeURI(new URL(toFileUrl(dirname(tab.path), href)).pathname)
+  if (api.platform === 'win32') resolved = resolved.replace(/^\//, '').replace(/\//g, '\\')
+  if (/\.(md|markdown|mdown|mkd|txt)$/i.test(resolved)) openFile(resolved)
+  else api.openPath(resolved)
+}
+
+/** Live Preview in "edit" mode, the plain Markdown source otherwise. */
+function applyEditorMode () {
+  editor?.setLive(state.settings.viewMode === 'live', liveHooks)
 }
 
 function renderPreview (immediate = false) {
@@ -481,10 +532,10 @@ function setColumnWidths (table, widths) {
   table.style.setProperty('--table-w', total.toFixed(1) + 'px')
 }
 
-function decorateTables (tab) {
+function decorateTables (tab, root = el.preview) {
   const saved = tableWidthsFor(tab) || {}
   const seen = new Map()
-  for (const table of el.preview.querySelectorAll('table')) {
+  for (const table of root.querySelectorAll('table')) {
     const row = headerRow(table)
     if (!row) continue
     const head = [...row.cells].map((c) => c.textContent.trim()).join('|')
@@ -610,8 +661,16 @@ function sourceLine (n) {
 }
 
 /** <!-- mashdavood widths: … --> on the line right above the table (null removes it). */
+/** Source line a rendered block starts at: its data-line in the preview, its position in the editor. */
+function blockLine (node, dataLine) {
+  return node.closest('.cm-editor') ? editor.lineAtDom(node) : Number(dataLine)
+}
+
 function writeTableWidths (table, widths) {
-  const start = Number(table.closest('.table-wrap')?.dataset.line)
+  const wrap = table.closest('.table-wrap')
+  // in a Live Preview widget the widths comment may sit above the table: find the table line
+  let start = blockLine(table, wrap?.dataset.line)
+  if (table.closest('.cm-editor') && sourceLine(start + 1) && TABLE_WIDTHS_RE.test(sourceLine(start + 1).text)) start += 1
   const head = sourceLine(start + 1)
   if (Number.isNaN(start) || !head || !head.text.includes('|')) return false
   const above = sourceLine(start)
@@ -626,7 +685,7 @@ function writeTableWidths (table, widths) {
 
 /** %% mashdavood {…} as the last line inside the diagram's fence (null removes it). */
 function writeDiagramLayout (block, data) {
-  const start = Number(block.dataset.line)
+  const start = blockLine(block, block.dataset.line)
   const open = sourceLine(start + 1)
   const fence = open && /^(\s*)(`{3,}|~{3,})\s*mermaid\b/i.exec(open.text)
   if (!fence) return false
@@ -1163,7 +1222,8 @@ function shortcutsModal () {
   const rows = [
     ['Open file / folder', '⌘O / ⇧⌘O'], ['New file', '⌘N'], ['Save / Save as', '⌘S / ⇧⌘S'],
     ['Close tab', '⌘W'], ['Next / previous tab', '⌃Tab / ⌃⇧Tab'],
-    ['Editor · Split · Preview', '⌘1 · ⌘2 · ⌘3'], ['Toggle sidebar', '⌘\\'], ['Toggle theme', '⇧⌘L'],
+    ['Edit · Read · switch', '⌘1 · ⌘2 · ⌘E'], ['Source + preview · Source only', '⌘3 · ⌘4'],
+    ['Open a link while editing', '⌘ + click'], ['Toggle sidebar', '⌘\\'], ['Toggle theme', '⇧⌘L'],
     ['Direction: auto / RTL / LTR', '⇧⌘A / ⇧⌘R / ⇧⌘D'],
     ['Find in document', '⌘F'], ['Bold / Italic / Link', '⌘B / ⌘I / ⌘K'],
     ['Inline code / Code block', '⇧⌘C / ⌥⌘C'], ['Heading 1–3', '⌥⌘1–3'],
@@ -1210,9 +1270,11 @@ async function handleMenu ({ action }) {
     case 'reveal': { const t = activeTab(); if (t?.path) api.reveal(t.path); break }
     case 'exportPdf': doExport('pdf'); break
     case 'exportHtml': doExport('html'); break
+    case 'view:live': setViewMode('live'); break
     case 'view:editor': setViewMode('editor'); break
     case 'view:split': setViewMode('split'); break
     case 'view:preview': setViewMode('preview'); break
+    case 'view:toggle': setViewMode(state.settings.viewMode === 'preview' ? 'live' : 'preview'); break
     case 'toggleSidebar': setSidebar(!state.settings.sidebarVisible); break
     case 'toggleTheme': applyTheme(state.dark ? 'light' : 'dark'); break
     case 'dir:auto': setDirection('auto'); break
@@ -1282,11 +1344,17 @@ function wireUi () {
     if (e.key === 'Escape' && !el.quickPanel.classList.contains('hidden')) { toggleQuickPanel(false); e.preventDefault() }
   })
 
-  // column resizing in preview tables
-  el.preview.addEventListener('mousedown', (e) => {
+  // column resizing in preview tables and in Live Preview table widgets
+  for (const root of [el.preview, el.editorHost]) {
+    root.addEventListener('mousedown', (e) => {
+      const handle = e.target.closest('.col-resizer')
+      if (handle && e.button === 0) startColumnResize(e, handle)
+    }, true)
+  }
+  el.editorHost.addEventListener('dblclick', (e) => {
     const handle = e.target.closest('.col-resizer')
-    if (handle && e.button === 0) startColumnResize(e, handle)
-  })
+    if (handle) { e.preventDefault(); e.stopPropagation(); resetColumnWidths(handle) }
+  }, true)
 
   // preview interactions
   el.preview.addEventListener('click', (e) => {
@@ -1307,12 +1375,7 @@ function wireUi () {
       if (target) el.previewScroll.scrollTo({ top: target.offsetTop - 24, behavior: 'smooth' })
     } else if (link.dataset.relative) {
       e.preventDefault()
-      const tab = activeTab()
-      if (!tab?.path) return
-      let resolved = decodeURI(new URL(toFileUrl(dirname(tab.path), link.dataset.relative)).pathname)
-      if (api.platform === 'win32') resolved = resolved.replace(/^\//, '').replace(/\//g, '\\')
-      if (/\.(md|markdown|mdown|mkd|txt)$/i.test(resolved)) openFile(resolved)
-      else api.openPath(resolved)
+      followLink(link.dataset.relative)
     }
   })
 
@@ -1320,9 +1383,11 @@ function wireUi () {
   el.preview.addEventListener('dblclick', (e) => {
     const handle = e.target.closest('.col-resizer')
     if (handle) { e.preventDefault(); resetColumnWidths(handle); return }
-    if (e.target.closest('.mmd-tools, .mmd-resize, .mmd-menu')) return
+    if (e.target.closest('.mmd-tools, .mmd-resize, .mmd-menu, .mermaid-block')) return
     const node = e.target.closest('[data-line]')
-    if (!node || state.settings.viewMode === 'preview') return
+    if (!node) return
+    // in Read mode a double-click switches to editing, right where you clicked
+    if (state.settings.viewMode === 'preview') setViewMode('live')
     editor.cursorToLine(Number(node.dataset.line))
   })
 
@@ -1440,6 +1505,12 @@ async function boot () {
   await applyTheme(settings.theme)
   setSidebar(settings.sidebarVisible)
   el.sidebar.style.width = (settings.sidebarWidth || 250) + 'px'
+  // 1.3: editing happens in the rendered view; two-column users move to it once
+  if (!settings.liveIntroduced) {
+    if (settings.viewMode === 'split' || settings.viewMode === 'editor') settings.viewMode = 'live'
+    settings.liveIntroduced = true
+    api.settings.merge({ viewMode: settings.viewMode, liveIntroduced: true })
+  }
   el.app.dataset.view = settings.viewMode
   setViewMode(settings.viewMode)
   setDirection(settings.direction)
@@ -1472,6 +1543,7 @@ async function boot () {
     onSave: () => saveTab(activeTab())
   })
 
+  applyEditorMode()
   requestAnimationFrame(() => {
     const total = el.panes.offsetWidth
     el.paneEditor.style.flex = `0 0 ${Math.round(total * (settings.splitRatio || 0.5))}px`
@@ -1483,6 +1555,7 @@ async function boot () {
   wireIpc()
   initUpdates({ api, state, openModal, toast, renderNotes: (text) => renderMarkdown(md, text), saveAllDirty })
   initDiagrams({ preview: el.preview, api, state, activeTab, toast, writeLayout: writeDiagramLayout, onLayout: () => { state.lineMap = [] } })
+  attachDiagramEvents(el.editorHost)            // diagram toolbars inside Live Preview widgets
   renderTree()
   renderTabs()
   renderRecent(settings)
