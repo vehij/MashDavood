@@ -108,6 +108,11 @@ exports lay a hidden preview out off-screen (`.export-layout`). The saved state 
   by the mean offset. Without a custom view the viewBox grows to the content.
 Table widths and diagram state are keyed by file path; `carryViewSettings` copies them to the new
 path on Save As, and moves an untitled tab's in-memory copy into `settings.json` on its first save.
+Timelines have no `g.node`: `indexTimeline` makes the period headers (`g.taskWrapper`, key
+`period:<text>`) and event boxes (`g.eventWrapper`, key `event:<text>`) the movable units; an event
+belongs to the period whose column it sits in and adds that period's offset to its own, and a
+period's dashed line (`g.lineWrapper > line`, matched by x) moves with it. Every movable unit gets
+`.mmd-movable`. Pie, gantt, quadrant and journey are data charts and stay fixed.
 `apply()` always starts from the originals, so it is idempotent across re-renders and theme changes.
 PNG/SVG: the renderer serialises the SVG (with a page-colour background); the main process embeds
 Estedad and, for PNG, renders it in an offscreen window at 2x and `capturePage`s it.
