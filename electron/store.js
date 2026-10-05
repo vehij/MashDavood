@@ -21,6 +21,7 @@ const DEFAULTS = {
   spellcheck: false,
   justify: false,            // justified paragraphs in preview + export
   tableWidths: {},           // { [filePath]: { [tableKey]: [px, ...] } } — view only, never written to the .md
+  diagrams: {},              // { [filePath]: { [diagramKey]: { vb, nodes } } } — mermaid zoom/frame/layout, view only
   checkUpdates: true,
   skippedVersion: null,
   lastUpdateCheck: 0,

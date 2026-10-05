@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('api', {
 
   exportHtml: (opts) => invoke('export:html', opts),
   exportPdf: (opts) => invoke('export:pdf', opts),
+  diagramImage: (opts) => invoke('diagram:image', opts),
 
   updates: {
     check: () => invoke('update:check'),

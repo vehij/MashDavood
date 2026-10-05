@@ -2,6 +2,7 @@ import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
 import { createRenderer, renderMarkdown, extractOutline, documentStats, detectDirection, toFileUrl } from './markdown.js'
 import { initUpdates, checkForUpdates } from './updates.js'
+import { initDiagrams, decorateDiagram, diagramKey, refreshDiagrams, stripDiagramChrome } from './diagrams.js'
 import { MarkdownEditor } from './editor.js'
 import { WELCOME_DOC } from './welcome.js'
 
@@ -151,7 +152,7 @@ function setViewMode (mode) {
   el.viewmode.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode))
   api.settings.merge({ viewMode: mode })
   if (mode !== 'preview') setTimeout(() => editor?.focus(), 0)
-  requestAnimationFrame(() => { state.lineMap = [] })
+  requestAnimationFrame(() => { state.lineMap = []; if (mode !== 'editor') refreshDiagrams() })
 }
 
 function setSidebar (visible) {
@@ -347,19 +348,23 @@ const mermaidCache = new Map()
 async function renderMermaid (dark = state.dark) {
   const blocks = el.preview.querySelectorAll('.mermaid-block')
   if (!blocks.length) return
+  const seen = new Map()
   for (const block of blocks) {
     const src = block.dataset.src || block.querySelector('.mermaid-source')?.textContent || ''
     if (!src.trim()) continue
     block.dataset.src = src
+    const viewKey = diagramKey(src, seen)      // zoom / layout saved for this diagram
     if (block.dataset.rendered === String(dark)) continue
     block.dataset.rendered = String(dark)
     const key = src + '|' + dark
-    if (mermaidCache.has(key)) { block.innerHTML = mermaidCache.get(key); continue }
+    if (mermaidCache.has(key)) { block.innerHTML = mermaidCache.get(key); decorateDiagram(block, viewKey); continue }
     try {
       const id = 'mmd-' + Math.random().toString(36).slice(2, 9)
       const { svg } = await mermaid.render(id, src)
       mermaidCache.set(key, svg)
+      if (!block.isConnected) continue
       block.innerHTML = svg
+      decorateDiagram(block, viewKey)
       block.classList.remove('error')
     } catch (e) {
       block.classList.add('error')
@@ -566,6 +571,7 @@ function cleanPreviewClone () {
   const clone = el.preview.cloneNode(true)
   clone.querySelectorAll('.copy-btn, .heading-anchor, .col-resizer, .code-lang, .mermaid-source, .fm-raw')
     .forEach((n) => n.remove())
+  stripDiagramChrome(clone)
   // KaTeX markup only makes sense with its stylesheet; carry the TeX source instead
   clone.querySelectorAll('[data-tex]').forEach((m) => {
     const display = m.tagName === 'DIV'
@@ -839,14 +845,18 @@ function collectCss () {
 function exportBody () {
   const clone = el.preview.cloneNode(true)
   clone.querySelectorAll('.col-resizer').forEach((n) => n.remove())
+  stripDiagramChrome(clone)
   return clone.innerHTML
 }
 
 async function doExport (kind, outPath = null) {
   const tab = activeTab()
   if (!tab) return
+  // diagram layouts need real geometry: give a hidden preview a layout off-screen
+  el.app.classList.add('export-layout')
   renderPreview(true)
   await new Promise((r) => setTimeout(r, 300))     // let mermaid finish
+  refreshDiagrams()
   // exports are always on a light page, so diagrams get the light palette too
   if (state.dark) {
     mermaid.initialize(mermaidConfig(false))
@@ -872,6 +882,7 @@ async function doExport (kind, outPath = null) {
   } catch (e) {
     toast('Export failed: ' + e.message, 'error')
   } finally {
+    el.app.classList.remove('export-layout')
     if (state.dark) {
       mermaid.initialize(mermaidConfig(true))
       await renderMermaid(true)
@@ -1047,7 +1058,8 @@ function shortcutsModal () {
     ['Bullet / numbered / task list', '⇧⌘8 / ⇧⌘7 / ⇧⌘9'], ['Quote', '⇧⌘.'],
     ['Table / Mermaid diagram', '⌥⌘T / ⌥⌘M'], ['Export PDF / HTML', '⌘P / ⇧⌘E'],
     ['Zoom in / out / reset', '⌘+ / ⌘− / ⌘0'], ['Reveal in Finder', '⌥⌘R'],
-    ['Copy document as shown / as Markdown', '⌥⇧⌘C / ⌥⇧⌘M'], ['Reading settings panel', '⌥⌘,']
+    ['Copy document as shown / as Markdown', '⌥⇧⌘C / ⌥⇧⌘M'], ['Reading settings panel', '⌥⌘,'],
+    ['Zoom a Mermaid diagram', '⌘ + scroll / pinch']
   ]
   openModal(`<h2>Keyboard Shortcuts</h2><table>${rows.map(([a, b]) => `<tr><td>${a}</td><td>${keys(b)}</td></tr>`).join('')}</table><div class="modal-foot"><button data-close>Close</button></div>`)
 }
@@ -1196,6 +1208,7 @@ function wireUi () {
   el.preview.addEventListener('dblclick', (e) => {
     const handle = e.target.closest('.col-resizer')
     if (handle) { e.preventDefault(); resetColumnWidths(handle); return }
+    if (e.target.closest('.mmd-tools, .mmd-resize, .mmd-menu')) return
     const node = e.target.closest('[data-line]')
     if (!node || state.settings.viewMode === 'preview') return
     editor.cursorToLine(Number(node.dataset.line))
@@ -1357,6 +1370,7 @@ async function boot () {
   wireUi()
   wireIpc()
   initUpdates({ api, state, openModal, toast, renderNotes: (text) => renderMarkdown(md, text), saveAllDirty })
+  initDiagrams({ preview: el.preview, api, state, activeTab, toast, onLayout: () => { state.lineMap = [] } })
   renderTree()
   renderTabs()
   renderRecent(settings)
