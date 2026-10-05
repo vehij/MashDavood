@@ -219,6 +219,7 @@ function prepare (block) {
     const box = { x: M.a * b.x + M.e, y: M.d * b.y + M.f, w: M.a * b.width, h: M.d * b.height }
     m.nodes.set(key, { el, t0, cx: c.x, cy: c.y, box })
   }
+  if (!m.nodes.size) indexTimeline(m)
 
   const labels = new Map()
   for (const el of svg.querySelectorAll('g.edgeLabel')) {
@@ -268,9 +269,53 @@ function prepare (block) {
     if (same.length === 1) { m.state.nodes[same[0][0]] = v; delete m.state.nodes[key] }
   }
 
+  for (const n of m.nodes.values()) n.el.classList.add('mmd-movable')
   m.ready = true
   block.classList.toggle('can-arrange', m.nodes.size > 0)
   apply(block)
+}
+
+/**
+ * Timelines have no g.node: the movable units are the period headers (g.taskWrapper)
+ * and the event boxes (g.eventWrapper). A period carries its column with it — the
+ * events under it follow its offset on top of their own, and so does its dashed line.
+ */
+function indexTimeline (m) {
+  const svg = m.svg
+  const tasks = svg.querySelectorAll(':scope > g.taskWrapper')
+  if (!tasks.length) return
+  const seen = new Map()
+  const keyOf = (kind, el) => {
+    const k = kind + ':' + el.textContent.replace(/\s+/g, ' ').trim().slice(0, 40)
+    const n = seen.get(k) || 0
+    seen.set(k, n + 1)
+    return n ? `${k}#${n}` : k
+  }
+  const unit = (el) => {
+    const t0 = el.getAttribute('transform') || ''
+    const c = parseTranslate(t0)
+    const b = el.getBBox()
+    const M = toRoot(svg, el)
+    return { el, t0, cx: c.x, cy: c.y, box: { x: M.a * b.x + M.e, y: M.d * b.y + M.f, w: M.a * b.width, h: M.d * b.height } }
+  }
+  const columns = []
+  for (const el of tasks) {
+    const key = keyOf('period', el)
+    const n = unit(el)
+    n.lines = []
+    m.nodes.set(key, n)
+    columns.push([key, n])
+  }
+  const columnAt = (x) => columns.find(([, n]) => Math.abs(n.box.x + n.box.w / 2 - x) < 2)?.[0] || null
+  for (const el of svg.querySelectorAll(':scope > g.eventWrapper')) {
+    const n = unit(el)
+    n.parent = columnAt(n.box.x + n.box.w / 2)
+    m.nodes.set(keyOf('event', el), n)
+  }
+  for (const line of svg.querySelectorAll(':scope > g.lineWrapper > line')) {
+    const owner = columnAt(Number(line.getAttribute('x1')))
+    if (owner) m.nodes.get(owner).lines.push({ el: line, t0: line.getAttribute('transform') || '' })
+  }
 }
 
 /** Put the saved state on the SVG. Idempotent: always starts from the originals. */
@@ -282,9 +327,12 @@ function apply (block) {
   let moved = false
 
   for (const [key, n] of m.nodes) {
-    const o = off(key)
-    if (o) moved = true
+    const own = off(key)
+    const parent = n.parent && off(n.parent)   // a timeline event moves with its period too
+    const o = own || parent ? [(own?.[0] || 0) + (parent?.[0] || 0), (own?.[1] || 0) + (parent?.[1] || 0)] : null
+    if (own) moved = true
     n.el.setAttribute('transform', o ? `translate(${r3(n.cx + o[0])}, ${r3(n.cy + o[1])})` : n.t0)
+    for (const line of n.lines || []) line.el.setAttribute('transform', own ? `translate(${r3(own[0])}, ${r3(own[1])})` : line.t0)
   }
 
   for (const e of m.edges) {
@@ -472,8 +520,7 @@ function onMouseDown (e) {
 
   if (e.target.closest('.mmd-resize')) return startResize(e, block)
 
-  const nodeEl = m.arranging && e.target.closest('g.node')
-  const nodeKey = nodeEl && [...m.nodes].find(([, n]) => n.el === nodeEl)?.[0]
+  const nodeKey = m.arranging ? [...m.nodes].find(([, n]) => n.el.contains(e.target))?.[0] : null
   e.preventDefault()
   const startX = e.clientX
   const startY = e.clientY
