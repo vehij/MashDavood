@@ -34,13 +34,17 @@ const icon = (name) => `<svg viewBox="0 0 20 20" width="14" height="14">${ICON[n
 
 export function initDiagrams (context) {
   ctx = context
-  const root = ctx.preview
-  root.addEventListener('mousedown', onMouseDown)
-  root.addEventListener('wheel', onWheel, { passive: false })
-  root.addEventListener('click', onClick)
+  attachDiagramEvents(ctx.preview)
   document.addEventListener('mousedown', (e) => {
     if (!e.target.closest('.mmd-menu, [data-mmd="menu"]')) closeMenus()
   })
+}
+
+/** Diagram controls work wherever diagrams are shown: the preview, Live Preview widgets. */
+export function attachDiagramEvents (root) {
+  root.addEventListener('mousedown', onMouseDown)
+  root.addEventListener('wheel', onWheel, { passive: false })
+  root.addEventListener('click', onClick)
 }
 
 /** Stable key: first line of the source (the diagram type) + its occurrence index. */

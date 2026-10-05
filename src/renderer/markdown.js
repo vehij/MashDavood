@@ -419,6 +419,18 @@ function frontMatterValue (value) {
   return escapeAttr(value)
 }
 
+/** KaTeX for a formula outside the markdown pipeline (Live Preview widgets). */
+export function renderMath (tex, display) {
+  try {
+    return katex.renderToString(tex, { displayMode: display, throwOnError: false, output: 'html', strict: false })
+  } catch {
+    return `<span class="math-error">${escapeAttr(tex)}</span>`
+  }
+}
+
+/** The front-matter card on its own (Live Preview widget). */
+export const renderFrontMatterHtml = (text) => DOMPurify.sanitize(renderFrontMatter(text))
+
 function renderFrontMatter (text) {
   const fields = parseFrontMatter(text)
   if (!fields) return `<div class="front-matter" dir="ltr" data-line="0">${escapeAttr(text)}</div>`
