@@ -1,10 +1,13 @@
 /* Mermaid diagrams in the preview: zoom, pan, frame height, dragging nodes (their
    edges and edge labels follow), a full-window view, and PNG / SVG export.
 
-   Everything is a *view* setting, saved in settings.json per file and per diagram
-   (the Markdown is never touched), and it lives in the SVG itself — the viewBox, the
+   The state is kept as a comment line inside the diagram's own source (app.js →
+   writeDiagramLayout), or in settings.json when that is switched off, and it lives in
+   the SVG itself — the viewBox, the
    node transforms, the redrawn edge paths — so a PDF/HTML export prints exactly the
    frame and layout that is on screen, at whatever width the page has. */
+
+import { readDiagramLayout } from './markdown.js'
 
 const PAD = 8                 // mermaid's own diagram padding
 const MIN_FRAME = 90          // px, smallest frame height
@@ -12,7 +15,8 @@ const MAX_ZOOM = 12           // relative to the diagram's natural width
 const MIN_ZOOM = 1 / 6
 const DRAG_THRESHOLD = 3      // px before a press becomes a pan/drag
 
-let ctx = null                // { preview, api, state, activeTab, toast, onLayout }
+let ctx = null                // { preview, api, state, activeTab, toast, writeLayout, onLayout }
+const arrangingKeys = new Set()  // arrange mode survives the re-render a layout write causes
 
 const ICON = {
   minus: '<path d="M5 10h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
@@ -51,7 +55,10 @@ export function diagramKey (src, seen) {
 export function decorateDiagram (block, key) {
   const svg = block.querySelector('svg')
   if (!svg) return
-  const saved = storeFor(ctx.activeTab())?.[key]
+  // the layout written in the diagram itself wins when that is where layouts are kept
+  const inFile = readDiagramLayout(block.dataset.src)
+  const inSettings = storeFor(ctx.activeTab())?.[key]
+  const saved = ctx.state.settings.embedLayout ? (inFile || inSettings) : (inSettings || inFile)
   block._mmd = {
     key,
     svg,
@@ -64,6 +71,7 @@ export function decorateDiagram (block, key) {
   }
   addChrome(block)
   prepare(block)
+  if (arrangingKeys.has(key)) setArranging(block, true)
 }
 
 /** Blocks laid out while the preview was hidden get their geometry now. */
@@ -97,11 +105,26 @@ function save (block) {
   clearTimeout(m.saveTimer)
   m.saveTimer = setTimeout(() => {
     const tab = ctx.activeTab()
-    const store = storeFor(tab, true)
-    if (!store) return
+    if (m.ready) {
+      // forget nodes that no longer exist, and keep each label current for rename matching
+      for (const key of Object.keys(m.state.nodes)) {
+        const n = m.nodes.get(key)
+        if (!n) delete m.state.nodes[key]
+        else m.state.nodes[key] = [m.state.nodes[key][0], m.state.nodes[key][1], labelOf(n)]
+      }
+    }
     const hasNodes = Object.keys(m.state.nodes).length > 0
-    if (!m.state.vb && !hasNodes) delete store[m.key]
-    else store[m.key] = { vb: m.state.vb && m.state.vb.map(r3), nodes: m.state.nodes }
+    const data = m.state.vb || hasNodes ? { vb: m.state.vb && m.state.vb.map((v) => Math.round(v * 10) / 10), nodes: m.state.nodes } : null
+    let store = storeFor(tab)
+    if (ctx.state.settings.embedLayout && ctx.writeLayout(block, data)) {
+      if (!store?.[m.key]) return
+      delete store[m.key]           // the file has it now
+    } else {
+      store = storeFor(tab, true)
+      if (!store) return
+      if (data) store[m.key] = data
+      else delete store[m.key]
+    }
     if (tab.path) {
       const all = ctx.state.settings.diagrams
       if (!Object.keys(store).length) delete all[tab.path]
@@ -113,6 +136,7 @@ function save (block) {
 /* ------------------------------------------------------------ geometry */
 
 const r3 = (n) => Math.round(n * 1000) / 1000
+const labelOf = (n) => n.el.textContent.replace(/\s+/g, ' ').trim().slice(0, 40)
 const parseVB = (s) => (s || '0 0 100 100').trim().split(/[\s,]+/).map(Number)
 const setVB = (svg, vb) => svg.setAttribute('viewBox', vb.map(r3).join(' '))
 
@@ -237,6 +261,13 @@ function prepare (block) {
     })
   }
 
+  // a node renamed in the source (new id, same text) keeps its position
+  for (const [key, v] of Object.entries(m.state.nodes)) {
+    if (m.nodes.has(key) || !v[2]) continue
+    const same = [...m.nodes].filter(([k, n]) => !m.state.nodes[k] && labelOf(n) === v[2])
+    if (same.length === 1) { m.state.nodes[same[0][0]] = v; delete m.state.nodes[key] }
+  }
+
   m.ready = true
   block.classList.toggle('can-arrange', m.nodes.size > 0)
   apply(block)
@@ -353,6 +384,7 @@ function resetLayout (block) {
 
 function setArranging (block, on) {
   block._mmd.arranging = on
+  if (on) arrangingKeys.add(block._mmd.key); else arrangingKeys.delete(block._mmd.key)
   block.classList.toggle('arranging', on)
   block.querySelector('[data-mmd="arrange"]')?.classList.toggle('on', on)
 }
@@ -465,7 +497,7 @@ function onMouseDown (e) {
     }
     const scale = m.svg.getScreenCTM().a || 1   // screen px per svg unit
     if (nodeKey) {
-      m.state.nodes[nodeKey] = [r3(base[0] + dx / scale), r3(base[1] + dy / scale)]
+      m.state.nodes[nodeKey] = [Math.round((base[0] + dx / scale) * 10) / 10, Math.round((base[1] + dy / scale) * 10) / 10]
     } else {
       m.state.vb = [base[0] - dx / scale, base[1] - dy / scale, base[2], base[3]]
     }

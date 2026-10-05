@@ -368,6 +368,10 @@ ipcMain.handle('fs:write', async (_e, { path: p, content }) => {
 })
 
 ipcMain.handle('fs:exists', async (_e, p) => { try { await fsp.access(p); return true } catch { return false } })
+// device + inode (file index on Windows): unchanged when a file is renamed or moved on the same disk
+ipcMain.handle('fs:id', async (_e, p) => {
+  try { const s = await fsp.stat(p, { bigint: true }); return `${s.dev}:${s.ino}` } catch { return null }
+})
 
 ipcMain.handle('fs:saveAs', async (_e, { defaultPath, content }) => {
   const res = await dialog.showSaveDialog(mainWindow, {

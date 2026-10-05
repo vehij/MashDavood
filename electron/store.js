@@ -20,8 +20,10 @@ const DEFAULTS = {
   autosave: true,
   spellcheck: false,
   justify: false,            // justified paragraphs in preview + export
-  tableWidths: {},           // { [filePath]: { [tableKey]: [px, ...] } } — view only, never written to the .md
+  tableWidths: {},           // { [filePath]: { [tableKey]: [px, ...] } } — used when embedLayout is off
   diagrams: {},              // { [filePath]: { [diagramKey]: { vb, nodes } } } — mermaid zoom/frame/layout, view only
+  embedLayout: true,         // keep table widths / diagram layouts inside the .md as invisible comments
+  fileIds: {},               // { [filePath]: "dev:ino" } — lets settings follow a file renamed outside the app
   checkUpdates: true,
   skippedVersion: null,
   lastUpdateCheck: 0,
