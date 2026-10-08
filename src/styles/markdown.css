@@ -14,7 +14,7 @@
 .markdown-body.justify p, .markdown-body.justify li, .markdown-body.justify dd { text-align: justify; }
 .markdown-body > *:first-child { margin-block-start: 0 !important; }
 
-/* every block gets dir="auto" from the renderer, so alignment must be logical */
+/* جهت محاسبه‌شده باید در ترتیب متن هم اعمال شود. plaintext دوباره از اولین حرف استفاده می‌کند. */
 .markdown-body p,
 .markdown-body li,
 .markdown-body h1, .markdown-body h2, .markdown-body h3,
@@ -22,6 +22,7 @@
 .markdown-body blockquote, .markdown-body dd, .markdown-body dt,
 .markdown-body td, .markdown-body th { text-align: start; unicode-bidi: plaintext; }
 .markdown-body [data-weak] { unicode-bidi: isolate; }
+.markdown-body [dir='rtl'], .markdown-body [dir='ltr'] { unicode-bidi: isolate; }
 
 .markdown-body p { margin: 0 0 1.05em; }
 
