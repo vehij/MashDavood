@@ -9,6 +9,7 @@
 
 import { syntaxTree } from '@codemirror/language'
 import { undo, redo } from '@codemirror/commands'
+import { estimateDirection, markdownDirectionText, PERSIAN_DIGITS } from './direction.mjs'
 
 const TABLE_WIDTHS = /^\s*<!--\s*mashdavood\s+widths:\s*([^>]*?)\s*-->\s*$/
 
@@ -177,6 +178,8 @@ export function attachTableEditing (host, view, hooks, showSource) {
     field.contentEditable = 'plaintext-only'
     field.spellcheck = false
     field.textContent = text
+    const directionText = markdownDirectionText(text)
+    field.dir = estimateDirection(directionText, PERSIAN_DIGITS.test(directionText) ? 'rtl' : (cell.dir || table.dir || 'ltr'))
     for (const n of [...cell.childNodes]) if (!n.classList?.contains('col-resizer')) n.remove()
     cell.prepend(field)
     cell.classList.add('lp-editing')
@@ -200,6 +203,8 @@ export function attachTableEditing (host, view, hooks, showSource) {
   function commit () {
     if (!active) return
     const { r, c, field } = active
+    const directionText = markdownDirectionText(field.textContent)
+    field.dir = estimateDirection(directionText, PERSIAN_DIGITS.test(directionText) ? 'rtl' : (table.rows[r].cells[c].dir || table.dir || 'ltr'))
     const loc = current()
     if (!loc) return
     const index = lineIndex(r)

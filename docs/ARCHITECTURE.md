@@ -25,30 +25,36 @@ extension array; `activateTab` stores the outgoing tab's `editor.state` and inst
 one. This is what keeps undo history, selection and search state per document — an earlier version
 reused a single state and `undo` could pull another tab's text into the current file.
 
-**Direction is resolved per block, not per document.**
-- Preview: a core rule in `markdown.js` (`metaPlugin`) walks the token stream, finds the first
-  inline token of every block and sets an explicit `dir="rtl"|"ltr"` on `p`, `h1..h6`, `li`, `ul`,
-  `ol`, `td`, `th`, `blockquote`, `dt`, `dd`, `table`. Explicit (rather than `dir="auto"`) so CSS
-  can react to it — e.g. `ol[dir='rtl'] { list-style-type: persian }`.
-- Editor: the `lineDirection` ViewPlugin in `editor.js` adds a `cm-line-rtl` / `cm-line-ltr`
-  decoration to every visible line. It strips markdown markers (`-`, `1.`, `>`, `#`, `[x]`) before
-  looking for the first strong character, otherwise a Persian list item resolves LTR because `[x]`
-  starts with a Latin letter. `EditorView.perLineTextDirection` is enabled so CodeMirror measures
-  each line with its own direction.
-- The app-level `data-dir` attribute (auto/rtl/ltr) only drives the container direction and the
-  "auto → estedad font" rule. The preview root gets the document's *effective* direction, never
-  `dir="auto"`: auto skips children that carry their own `dir` (every block does), so it always
-  resolved LTR.
-- Tables and the front-matter card take the direction of the *majority* of their letters
-  (`dominantDirection`), so one English header cannot flip a Persian table. Cells keep their own
-  `dir` for text order, but `text-align` follows the table, so a column lines up on one side.
-- Persian/Arabic-Indic digits are weak characters and never decide a direction. A block with no
-  letters at all (`**۱.۲.۰**`, a price cell) gets `data-weak`: `unicode-bidi: plaintext` would
-  fall back to LTR there, so it is swapped for `isolate` and the block inherits (or is RTL when it
-  has Persian digits).
-- `overflow-wrap: break-word`, never `anywhere`, on the preview: `anywhere` also lowers the
-  min-content width, and auto-sized table columns then split Persian words (اطمینا|ن).
-- Inline `code` and KaTeX are `unicode-bidi: isolate`, so they never reorder the Persian around them.
+**جهت هر بخش جداگانه برآورد می‌شود.**
+- تابع مشترک `estimateDirection` در `direction.mjs` واژه‌ها را می‌شمارد. اگر بیش از ۴۰٪
+  واژه‌های دارای حرف با حرف راست‌به‌چپ شروع شوند، نتیجه `rtl` است. در حالت دیگر، نتیجه
+  `ltr` است. اگر هیچ حرفی وجود نداشته باشد، جهت پیش‌فرض استفاده می‌شود. رقم، اعراب،
+  نشانهٔ نگارشی و کشیده در شمارش واژه‌ها شرکت نمی‌کنند. نیم‌فاصله واژه را جدا نمی‌کند.
+- این روش از [برآورد Closure گوگل](https://github.com/google/closure-library/blob/master/closure/goog/i18n/bidi.js)
+  الهام گرفته است. این برآورد، تشخیص زبان نیست. [W3C](https://www.w3.org/TR/string-meta/#first-strong-property-detection)
+  خطای روش اولین حرف را برای متن راست‌به‌چپ با شروع انگلیسی توضیح می‌دهد. جهت صریح
+  در HTML برای مواردی که برآورد نتیجهٔ مطلوب ندارد، قابل استفاده است.
+- پیش‌نمایش: `metaPlugin` متن نمایشی هر بخش را از توکن‌های درون‌خطی می‌گیرد و ویژگی
+  `dir` را تعیین می‌کند. کد، فرمول، برچسب HTML و مقصد پیوند در شمارش وارد نمی‌شوند.
+  واژه‌های نشانی وب و ایمیل نیز حذف می‌شوند. جست‌وجو در انتهای همان بخش متوقف می‌شود.
+- ویرایشگر: `lineDirection` از درخت نحوی CodeMirror پاراگراف یا عنوان هر خط را پیدا
+  می‌کند. همهٔ خط‌های آن بخش یک جهت دارند. نتیجهٔ هر بخش در همان نوبت محاسبه ذخیره
+  می‌شود. اگر درخت هنوز آماده نباشد، متن همان خط استفاده می‌شود. با تکمیل درخت، جهت
+  دوباره محاسبه می‌شود. کد چندخطی همواره چپ‌به‌راست است.
+- `unicode-bidi: isolate` جهت صریح را حفظ می‌کند. `plaintext` برای این بخش‌ها مناسب
+  نیست، چون جهت پایه را دوباره از اولین حرف تعیین می‌کند. این قانون در سندی که جهت
+  پیش‌فرض آن `ltr` است نیز برای خط فارسی اعمال می‌شود.
+- جهت پیش‌فرض سند از حداکثر ۶۰۰۰ نویسهٔ نخست و با همان روش برآورد می‌شود.
+  `data-dir` جهت ظرف و انتخاب خودکار قلم را کنترل می‌کند. بخش‌ها جهت مستقل خود را دارند.
+- جدول و کارت فراداده از مجموع واژه‌های خود استفاده می‌کنند. هر خانهٔ جدول جهت مستقل
+  دارد، ولی هم‌ترازی خانه‌ها از جهت جدول پیروی می‌کند. هنگام ویرایش خانه نیز همین روش
+  برآورد استفاده می‌شود.
+- بخش بدون حرف با `data-weak` مشخص می‌شود. اگر رقم فارسی یا عربی داشته باشد، `rtl`
+  می‌گیرد. در حالت دیگر، جهت را از بخش والد می‌گیرد.
+- عنوان کاملاً انگلیسی، مانند `A–S`، چپ‌به‌راست می‌ماند. کد و فرمول نیز جدا نمایش داده
+  می‌شوند. محتوای سند برای اعمال این قواعد تغییر نمی‌کند.
+- برای آزمایش تابع، `npm test` را اجرا کنید. برای آزمایش پیش‌نمایش و ویرایشگر در
+  Electron، `npm run test:renderer` را اجرا کنید. آزمایش دوم به محیط گرافیکی نیاز دارد.
 
 **Native selection, not `drawSelection()`.** CodeMirror's drawn selection layer computes its
 rectangles from its own bidi model and drifts on mixed RTL/LTR lines (the highlight lands a few

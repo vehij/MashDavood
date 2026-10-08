@@ -1,10 +1,10 @@
 import { EditorView, keymap, dropCursor, highlightActiveLine, rectangularSelection, crosshairCursor, placeholder, Decoration, ViewPlugin } from '@codemirror/view'
 import { EditorState, Compartment, EditorSelection, RangeSetBuilder } from '@codemirror/state'
-import { firstStrongDirection } from './markdown.js'
+import { estimateDirection, markdownDirectionText, PERSIAN_DIGITS } from './direction.mjs'
 import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
-import { syntaxHighlighting, HighlightStyle, bracketMatching, indentUnit } from '@codemirror/language'
+import { syntaxHighlighting, HighlightStyle, bracketMatching, indentUnit, syntaxTree } from '@codemirror/language'
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, search } from '@codemirror/search'
 import { tags as t } from '@lezer/highlight'
 import { livePreview, refreshLive } from './live.js'
@@ -31,9 +31,7 @@ const mdHighlight = HighlightStyle.define([
 ])
 
 /* --------------------------------------------------------------------------
-   Per-line text direction: markdown markers (-, 1., >, #, [x]) are neutral
-   characters, so a Persian list item would otherwise be resolved left-to-right.
-   We look past the markers, then pin the line's direction explicitly.
+   جهت هر خط از پاراگراف آن به دست می‌آید. شکست خط نباید جهت یک پاراگراف را عوض کند.
    -------------------------------------------------------------------------- */
 
 const MD_PREFIX = /^(?:[\s>]*(?:[-*+]|\d+[.)])?\s*)*(?:\[[ xX]\]\s*)?(?:#{1,6}\s*)?/
@@ -42,24 +40,37 @@ const ltrLine = Decoration.line({ class: 'cm-line-ltr' })
 // the app's own layout lines (%% mashdavood {…}, <!-- mashdavood widths: … -->) stay quiet
 const layoutLine = Decoration.line({ class: 'cm-line-ltr cm-layout-line' })
 const LAYOUT_LINE = /^\s*(?:%%\s*mashdavood\b|<!--\s*mashdavood\s)/
+const PROSE_BLOCKS = new Set(['Paragraph', 'ATXHeading1', 'ATXHeading2', 'ATXHeading3', 'ATXHeading4', 'ATXHeading5', 'ATXHeading6', 'SetextHeading1', 'SetextHeading2'])
+const CODE_BLOCKS = new Set(['FencedCode', 'CodeBlock'])
 
 const lineDirection = ViewPlugin.fromClass(class {
   constructor (view) { this.decorations = this.build(view) }
-  update (u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view) }
+  update (u) {
+    if (u.docChanged || u.viewportChanged || syntaxTree(u.startState) !== syntaxTree(u.state)) this.decorations = this.build(u.view)
+  }
   build (view) {
     const builder = new RangeSetBuilder()
+    const tree = syntaxTree(view.state)
+    const directions = new Map()
     for (const { from, to } of view.visibleRanges) {
       for (let pos = from; pos <= to;) {
         const line = view.state.doc.lineAt(pos)
         if (line.length && LAYOUT_LINE.test(line.text)) {
           builder.add(line.from, line.from, layoutLine)
         } else if (line.length) {
-          const stripped = line.text.replace(MD_PREFIX, '')
-          const probe = stripped.trim() ? stripped : line.text
-          let dir = null
-          for (const ch of probe) {
-            if (/[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/.test(ch)) { dir = 'rtl'; break }
-            if (/[A-Za-z\u00C0-\u024F]/.test(ch)) { dir = 'ltr'; break }
+          const prefix = line.text.match(MD_PREFIX)[0].length
+          let node = tree.resolveInner(Math.min(line.to, line.from + prefix + 1), 1)
+          while (node && !PROSE_BLOCKS.has(node.name) && !CODE_BLOCKS.has(node.name)) node = node.parent
+          let dir
+          if (node && CODE_BLOCKS.has(node.name)) dir = 'ltr'
+          else {
+            const key = node ? node.from : line.from
+            if (!directions.has(key)) {
+              const source = node ? view.state.doc.sliceString(node.from, node.to) : line.text
+              const text = markdownDirectionText(source)
+              directions.set(key, estimateDirection(text, PERSIAN_DIGITS.test(text) ? 'rtl' : null))
+            }
+            dir = directions.get(key)
           }
           if (dir === 'rtl') builder.add(line.from, line.from, rtlLine)
           else if (dir === 'ltr') builder.add(line.from, line.from, ltrLine)

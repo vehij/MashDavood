@@ -6,6 +6,8 @@
   "main": "electron/main.js",
   "type": "commonjs",
   "scripts": {
+    "test": "node --test tests/direction.test.mjs",
+    "test:renderer": "electron tests/renderer.cjs",
     "build": "vite build",
     "start": "vite build && electron .",
     "pack": "vite build && electron-builder --mac --arm64 --dir",

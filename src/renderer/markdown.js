@@ -9,33 +9,10 @@ import sup from 'markdown-it-sup'
 import hljs from 'highlight.js/lib/common'
 import katex from 'katex'
 import DOMPurify from 'dompurify'
+import { estimateDirection, PERSIAN_DIGITS } from './direction.mjs'
+export { detectDirection } from './direction.mjs'
 
 /* ------------------------------------------------------------- helpers */
-
-const RTL_CHARS = '֐-׿؀-ۿ܀-ݏݐ-ݿހ-޿ࢠ-ࣿיִ-﷿ﹰ-﻿'
-const RTL_RE = new RegExp('[' + RTL_CHARS + ']')
-const RTL_G = new RegExp('[' + RTL_CHARS + ']', 'g')
-const LTR_RE = /[A-Za-zÀ-ɏ]/
-// Arabic-Indic and Persian digits sit inside the Arabic block but are weak characters:
-// they never decide a direction, only letters do
-const AR_DIGIT_RE = /[\u0660-\u0669\u06F0-\u06F9]/
-
-/** Detect the dominant direction of a chunk of text. */
-export function detectDirection (text) {
-  if (!text) return 'ltr'
-  const sample = text.length > 6000 ? text.slice(0, 6000) : text
-  const rtl = (sample.match(RTL_G) || []).length
-  const ltr = (sample.match(/[A-Za-z]/g) || []).length
-  return rtl > 8 && rtl > ltr * 0.35 ? 'rtl' : 'ltr'
-}
-
-export function firstStrongDirection (text, fallback = 'ltr') {
-  for (const ch of text || '') {
-    if (RTL_RE.test(ch) && !AR_DIGIT_RE.test(ch)) return 'rtl'
-    if (LTR_RE.test(ch)) return 'ltr'
-  }
-  return fallback
-}
 
 export function slugify (str) {
   return String(str)
@@ -198,20 +175,21 @@ export function readDiagramLayout (src) {
   try { const v = JSON.parse(m[1]); return v && typeof v === 'object' ? v : null } catch { return null }
 }
 
-/** Direction of a mixed block (a table, the front matter) by letter count. */
-function dominantDirection (text) {
-  const rtl = (text.match(RTL_G) || []).length
-  const ltr = (text.match(/[A-Za-z]/g) || []).length
-  return rtl && rtl >= ltr * 0.5 ? 'rtl' : 'ltr'
+// فقط متن نمایشی در شمارش شرکت می‌کند. کد، فرمول و نشانی پیوند کنار گذاشته می‌شوند.
+function inlineDirectionText (token) {
+  return (token.children || []).map((child) => {
+    if (child.type === 'text' || child.type === 'image') return child.content
+    return ' '
+  }).join('')
 }
 
 /** Direction of a whole table: one English header must not flip a Persian table. */
 function tableDirection (tokens, start) {
   let text = ''
   for (let j = start + 1; j < tokens.length && tokens[j].type !== 'table_close'; j++) {
-    if (tokens[j].type === 'inline') text += tokens[j].content + ' '
+    if (tokens[j].type === 'inline') text += inlineDirectionText(tokens[j]) + ' '
   }
-  return dominantDirection(text)
+  return estimateDirection(text)
 }
 
 function metaPlugin (md) {
@@ -226,20 +204,22 @@ function metaPlugin (md) {
         const saved = prev && prev.type === 'html_block' && TABLE_WIDTHS_RE.exec(prev.content)
         if (saved) token.attrSet('data-widths', saved[1].replace(/\s+/g, ''))
       } else if (token.type.endsWith('_open') && (DIR_TAGS.has(token.tag) || token.tag === 'ul' || token.tag === 'ol')) {
-        // resolve the direction from the first strong character of the block's own text,
-        // which is what dir="auto" would do — but explicit, so CSS can react to it
+        // جست‌وجو در همین بخش متوقف می‌شود تا جهت بخش بعدی وارد آن نشود.
         let text = null
-        for (let j = i + 1; j < tokens.length && j < i + 40; j++) {
-          if (tokens[j].type === 'inline' && tokens[j].content.trim()) { text = tokens[j].content; break }
+        let depth = 1
+        for (let j = i + 1; j < tokens.length; j++) {
+          depth += tokens[j].nesting
+          if (!depth) break
+          if (tokens[j].type === 'inline' && tokens[j].content.trim()) { text = inlineDirectionText(tokens[j]); break }
         }
-        const dir = text === null ? 'auto' : firstStrongDirection(text, null)
+        const dir = text === null ? 'auto' : estimateDirection(text, null)
         if (dir) token.attrSet('dir', dir)
         else {
           // only digits and punctuation (a version number, a price cell): no direction of
           // its own. Persian digits read right-to-left; otherwise inherit the parent's.
           // data-weak swaps unicode-bidi: plaintext (which falls back to LTR) for isolate.
           token.attrSet('data-weak', '1')
-          if (AR_DIGIT_RE.test(text)) token.attrSet('dir', 'rtl')
+          if (PERSIAN_DIGITS.test(text)) token.attrSet('dir', 'rtl')
         }
       }
       if (token.map && (LINE_TAGS.has(token.tag) || token.type === 'fence' || token.type === 'hr')) {
@@ -411,7 +391,7 @@ export function parseFrontMatter (text) {
 
 function frontMatterValue (value) {
   if (Array.isArray(value)) {
-    return value.map((v) => `<span class="fm-tag" dir="${firstStrongDirection(v)}">${escapeAttr(v)}</span>`).join('')
+    return value.map((v) => `<span class="fm-tag" dir="${estimateDirection(v)}">${escapeAttr(v)}</span>`).join('')
   }
   if (/^https?:\/\/\S+$/i.test(value)) {
     return `<a href="${escapeAttr(value)}" data-external="1" dir="ltr">${escapeAttr(value)}</a>`
@@ -435,10 +415,10 @@ function renderFrontMatter (text) {
   const fields = parseFrontMatter(text)
   if (!fields) return `<div class="front-matter" dir="ltr" data-line="0">${escapeAttr(text)}</div>`
   const rows = fields.map(({ key, value }) => {
-    const dir = Array.isArray(value) ? 'auto' : firstStrongDirection(value)
+    const dir = Array.isArray(value) ? 'auto' : estimateDirection(value)
     return `<div class="fm-row"><dt dir="ltr">${escapeAttr(key)}</dt><dd dir="${dir}">${frontMatterValue(value)}</dd></div>`
   }).join('')
-  const dir = dominantDirection(fields.map(({ value }) => [].concat(value).join(' ')).join(' '))
+  const dir = estimateDirection(fields.map(({ value }) => [].concat(value).join(' ')).join(' '))
   return `<div class="fm-card" dir="${dir}" data-line="0"><dl>${rows}</dl>` +
     `<details class="fm-raw"><summary>YAML</summary><pre dir="ltr">${escapeAttr(text)}</pre></details></div>`
 }

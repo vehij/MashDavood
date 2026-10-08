@@ -15,6 +15,7 @@ import { EditorView, Decoration, WidgetType } from '@codemirror/view'
 import { StateField, StateEffect } from '@codemirror/state'
 import { syntaxTree, ensureSyntaxTree } from '@codemirror/language'
 import { attachTableEditing } from './table-edit.js'
+import { estimateDirection, markdownDirectionText } from './direction.mjs'
 
 /** Re-render every widget (theme change, settings that affect rendering). */
 export const refreshLive = StateEffect.define()
@@ -374,7 +375,7 @@ function build (state, hooks, epoch) {
         if (callout) {
           // the title line ("[!NOTE]", Latin) takes the direction of the callout's text
           const body = doc.sliceString(doc.lineAt(node.from).to, node.to)
-          add(node.from, node.from, line(firstStrong(body) === 'rtl' ? 'lp-dir-rtl' : 'lp-dir-ltr'))
+          add(node.from, node.from, line(estimateDirection(markdownDirectionText(body)) === 'rtl' ? 'lp-dir-rtl' : 'lp-dir-ltr'))
         }
         if (callout && !lineTouched(node.from, node.from)) {
           const at = doc.sliceString(node.from, node.to).indexOf(callout[0])
@@ -467,14 +468,6 @@ function build (state, hooks, epoch) {
   }
 
   return Decoration.set(out, true)
-}
-
-function firstStrong (text) {
-  for (const ch of text.replace(/^[\s>]+/gm, '')) {
-    if (/[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/.test(ch) && !/[\u0660-\u0669\u06F0-\u06F9]/.test(ch)) return 'rtl'
-    if (/[A-Za-z\u00C0-\u024F]/.test(ch)) return 'ltr'
-  }
-  return null
 }
 
 const calloutClass = (t) => ({ NOTE: 'note', INFO: 'note', TIP: 'tip', IMPORTANT: 'tip', WARNING: 'warning', CAUTION: 'warning', DANGER: 'danger' }[t.toUpperCase()] || 'note')
